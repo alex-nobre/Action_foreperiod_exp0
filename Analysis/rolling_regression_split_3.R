@@ -1,0 +1,312 @@
+
+
+#===================================================================#
+# Rolling regression analysis
+# Runs rolling regression separately for each counterbalancing order
+# Because participants went through distinct experimental conditions
+# in distinct orders, their learning trajectories are not comparable
+# Thus, here we only extract coefficients for the first half of the 
+# experiment, in which they have not been exposed to different conditions
+# before
+
+# Changes:
+# Does not subtract first value from each coefficient
+#===================================================================#
+
+setwd('G:/My Drive/Post-doc/Projetos/Action_foreperiod/Experimento_0/')
+source('./Analysis/Prepare_data_3.R')
+source('./Analysis/plot_theme.R')
+
+# Load packages
+library(zoo)
+library(reshape2)
+library(forcats)
+library(lemon)
+
+
+#======================== 1.  Prepare data ================================
+# Import data in right format (i.e., including trials with wrong responses,
+# outliers and no-go trials. These will later be dealt with within the loop)
+goData3 <- data
+  
+# Coerce foreperiod and FP n-1 back to numeric
+goData3$numForeperiod <- as.numeric(as.character(goData3$foreperiod))
+goData3$numOneBackFP <- as.numeric(as.character(goData3$oneBackFP))
+
+# Transform RT to reduce skew
+# goData3$logRT <- ifelse(!is.na(goData3$RT), log10(goData3$RT), NA) # log-transform
+# goData3$invRT <- ifelse(!is.na(goData3$RT), 1/goData3$RT, NA)
+
+goData3 <- goData3 %>%
+  mutate(RT=RT*1000,
+         logRT=ifelse(!is.na(RT), log10(RT), NA),
+         invRT=ifelse(!is.na(RT), 1/RT, NA))
+
+# Flag outliers
+goData3 <- goData3 %>%
+  group_by(ID) %>%
+  mutate(RTzscore=ifelse(!is.na(RT), compute_zscore(RT), NA),
+         logRTzscore=ifelse(!is.na(RT), compute_zscore(logRT), NA)) %>%
+  mutate(outlier = ifelse(abs(logRTzscore) > 3,TRUE,FALSE)) %>%
+  ungroup()
+
+#===================== 2. Functions and parameters =======================
+regr_fun <- function(z) {
+  # some conversion statements (rollapply does strange things to variable columns..)
+  dd <- z  %>% as.data.frame
+  # center
+  dd$numForeperiod %<>% as.character  %>% as.numeric %>% subtract(1.2)
+  dd$RT %<>% as.character  %>% as.numeric
+  dd$numOneBackFP %<>% as.character  %>% as.numeric %>% subtract(1.2)
+  mod <- lm(RT ~ numForeperiod*numOneBackFP, data=dd, na.action = 'na.omit')
+  return(coef(mod))
+}
+
+# use this to use different winsizes
+# win = 11
+win = 39
+# win = 59
+
+# Limits of rolling window for rollapply and for indices
+lowlim <- win %/% 2 + 1# 1 + win/2
+highlim <- 300 - (win %/% 2) # (300-win/2)+1
+  
+# Function to get condition values within individual participant's data
+# Works only for even values of rows
+getCondIdx <- function(dd) {
+  ddnrows <- nrow(dd)
+  startlim <- lowlim
+  endlim <- highlim
+  condIdx <- dd %>%
+    #mutate(trial_idx=seq(n())) %>%
+    slice(startlim:endlim) %>%
+    #slice((win/2):(ddnrows-(win/2))) %>%
+    select(condition)
+  return(condIdx)
+}
+
+#===================== 3. Get action coefs =======================
+# Get coefficients for the first half of the experimento for participants
+# in the "action-external" counterbalancing order
+
+# Filter participants by counterbalancing order
+goData4 <- goData3 %>%
+  filter(counterbalance=='action-external')
+
+## Apply lm with rolling window get beta-timecourses
+goData4  %>% mutate(RT = ifelse(Acc==1,RT,NA), 
+                    RT = ifelse(outlier==FALSE, RT, NA),
+                    RT = ifelse(!is.na(numOneBackFP), RT, NA))  %>% 
+  group_by(ID) %>%
+  mutate(trial_idx=seq(n()))  %>% 
+  do( rollapply(., width = win,
+                FUN = regr_fun,
+                by.column = FALSE, align = "center",partial=FALSE)  %>% 
+        data.frame  %>% 
+        tibble::rownames_to_column(var='idx') ) -> bigcoeff
+
+# Get condition values for each trial and bind to data frame with beta coefficients
+cond_idx <- goData4 %>%
+  group_by(ID) %>%
+  getCondIdx() %>%
+  ungroup()
+
+bigcoeff$condition <- cond_idx$condition
+
+names(bigcoeff) <- c('ID','idx','intercept','fpMain','oneBackFPMain','interaction','condition')
+bigcoeff$idx  %<>% as.numeric  %>% add(win %/% 2) # add win/2 size to correct trial index
+
+# 2.2. Plot coefficients
+bigcoeffAction <- bigcoeff %>%
+  # group_by(ID) %>%
+  # mutate(intercept = intercept - intercept[1],
+  #        fpMain = fpMain - fpMain[1],
+  #        oneBackFPMain = oneBackFPMain - oneBackFPMain[1],
+  #        interaction = interaction - interaction[1]) %>%
+  # ungroup() %>%
+  filter(condition=='action') %>%
+  select(-condition) %>%
+  melt(id.vars=c('ID','idx')) %>%
+  group_by(ID,variable) %>% 
+  select_at(c('ID',c('idx','variable'),'value'))
+
+colnames(bigcoeffAction) <- c('group',c('idx','variable'),'dv')
+
+bigcoeffAction <- bigcoeffAction %>%
+  group_by_at(c('idx','variable')) %>%
+  summarize(dv = mean(dv, na.rm=TRUE))  %>% data.frame
+
+rownames(bigcoeffAction) <- NULL
+colnames(bigcoeffAction) <- c(c('idx','variable'),'value')
+
+head(bigcoeffAction)
+
+cfPlotAction <- bigcoeffAction %>%
+  ggplot(aes(x=idx,
+             y=value)) +
+  geom_hline(yintercept=0.0, size=lsz*.25, color='black') + 
+  geom_line(aes(color=variable), size=lsz) + mytheme +
+  theme(legend.position='none', legend.justification = c(1,0)) + 
+  colbetas + fillbetas + facet_rep_grid(variable~.) + ylim(-.40,.40) + xlim(-1,300) +
+  xlab("Trial") + ylab("beta coefficient") +
+  labs(title='Action beta coefs - windows size = 40')
+
+cfPlotActionOneBack <- bigcoeffAction %>%
+  filter(variable=="oneBackFPMain") %>%
+  ggplot(aes(x=idx,
+             y=value)) +
+  geom_hline(yintercept=0.0, size=lsz*.25, color='black') + 
+  geom_line(aes(color=variable), size=lsz) + mytheme +
+  theme(legend.position='none', legend.justification = c(1,0)) + 
+  colbetas + fillbetas + 
+  #ylim(-.05,.05) + 
+  xlim(-1,300) +
+  xlab("Trial") + ylab("beta coefficient") +
+  labs(title='Action beta coefs - windows size = 40')
+
+cfPlotActionFpMain <- bigcoeffAction %>%
+  filter(variable=="fpMain") %>%
+  ggplot(aes(x=idx,
+             y=value)) +
+  geom_hline(yintercept=0.0, size=lsz*.25, color='black') + 
+  geom_line(aes(color=variable), size=lsz) + mytheme +
+  theme(legend.position='none', legend.justification = c(1,0)) + 
+  colbetas + fillbetas + 
+  #ylim(-.05,.05) + 
+  xlim(-1,300) +
+  xlab("Trial") + ylab("beta coefficient") +
+  labs(title='Action beta coefs - windows size = 40')
+
+for (i in seq(4)) {
+  idx = (i-1)* 75
+  cfPlotAction <- cfPlotAction + geom_vline(xintercept = idx, color='black',linetype='dotted', size=0.15*lsz)
+}
+cfPlotAction
+
+## Save the plot with one of the following:
+ggsave('./Plots/Rolling_regression/Split_dataset/action_beta_traces_40.tiff',width = 7.5, height=12, units = 'cm')
+ggsave('./Plots/Rolling_regression/Split_dataset/action_beta_traces_12.tiff',width = 7.5, height=12, units = 'cm')
+ggsave('./Plots/Rolling_regression/Split_dataset/action_beta_traces_60.tiff',width = 7.5, height=12, units = 'cm')
+
+#===================== 4. Get external coefs =======================
+# Now we get coefficients for the second half of the experiment for participants
+# in the "external-action" counterbalancing order
+
+# Filter participants by counterbalancing order
+goData5 <- goData3 %>%
+  filter(counterbalance=='external-action')
+
+## Apply lm with rolling window get beta-timecourses
+goData5  %>% mutate(RT = ifelse(Acc==1,RT,NA), 
+                    RT = ifelse(outlier==FALSE, RT, NA),
+                    RT = ifelse(!is.na(numOneBackFP), RT, NA))  %>% 
+  group_by(ID) %>%
+  mutate(trial_idx=seq(n()))  %>% 
+  do( rollapply(., width = win,
+                FUN = regr_fun,
+                by.column = FALSE, align = "center",partial=FALSE)  %>% 
+        data.frame  %>% 
+        tibble::rownames_to_column(var='idx') ) -> bigcoeff
+
+# Get condition values for each trial and bind to data frame with beta coefficients
+cond_idx <- goData5 %>%
+  group_by(ID) %>%
+  getCondIdx() %>%
+  ungroup()
+
+bigcoeff$condition <- cond_idx$condition
+
+names(bigcoeff) <- c('ID','idx','intercept','fpMain','oneBackFPMain','interaction','condition')
+bigcoeff$idx  %<>% as.numeric  %>% add(win %/% 2) # add win/2 size to correct trial index
+
+
+# 2.2.2. External trials
+bigcoeffExternal <- bigcoeff %>%
+  # group_by(ID) %>%
+  # mutate(intercept = intercept - intercept[1],
+  #        fpMain = fpMain - fpMain[1],
+  #        oneBackFPMain = oneBackFPMain - oneBackFPMain[1],
+  #        interaction = interaction - interaction[1]) %>%
+  # ungroup() %>%
+  filter(condition=='external') %>%
+  select(-condition) %>%
+  melt(id.vars=c('ID','idx')) %>%
+  group_by(ID,variable) %>% 
+  select_at(c('ID',c('idx','variable'),'value'))
+
+colnames(bigcoeffExternal) <- c('group',c('idx','variable'),'dv')
+
+bigcoeffExternal <- bigcoeffExternal %>%
+  group_by_at(c('idx','variable')) %>%
+  summarize(dv = mean(dv, na.rm=TRUE))  %>% data.frame
+
+rownames(bigcoeffExternal) <- NULL
+colnames(bigcoeffExternal) <- c(c('idx','variable'),'value')
+
+head(bigcoeffExternal)
+
+cfPlotExternal <- bigcoeffExternal %>%
+  ggplot(aes(x=idx,
+             y=value)) +
+  geom_hline(yintercept=0.0, size=lsz*.25, color='black') + 
+  geom_line(aes(color=variable), size=lsz) + mytheme +
+  theme(legend.position='none', legend.justification = c(1,0)) + 
+  colbetas + fillbetas + facet_rep_grid(variable~.) + ylim(-.40,.40) + xlim(-1,300) +
+  xlab("Trial") + ylab("beta coefficient") +
+  labs(title='External beta coefs - windows size = 40')
+
+for (i in seq(4)) {
+  idx = (i-1)* 75
+  cfPlotExternal <- cfPlotExternal + geom_vline(xintercept = idx, color='black',linetype='dotted', size=0.15*lsz)
+}
+cfPlotExternal
+
+cfPlotExternalOneBack <- bigcoeffExternal %>%
+  filter(variable=="oneBackFPMain") %>%
+  ggplot(aes(x=idx,
+             y=value)) +
+  geom_hline(yintercept=0.0, size=lsz*.25, color='black') + 
+  geom_line(aes(color=variable), size=lsz) + mytheme +
+  theme(legend.position='none', legend.justification = c(1,0)) + 
+  colbetas + fillbetas + 
+  #ylim(-.05,.05) + 
+  xlim(-1,300) +
+  xlab("Trial") + ylab("beta coefficient") +
+  labs(title='External beta coefs - windows size = 40')
+
+cfPlotExternalFpMain <- bigcoeffExternal %>%
+  filter(variable=="fpMain") %>%
+  ggplot(aes(x=idx,
+             y=value)) +
+  geom_hline(yintercept=0.0, size=lsz*.25, color='black') + 
+  geom_line(aes(color=variable), size=lsz) + mytheme +
+  theme(legend.position='none', legend.justification = c(1,0)) + 
+  colbetas + fillbetas + 
+  #ylim(-.05,.05) + 
+  xlim(-1,300) +
+  xlab("Trial") + ylab("beta coefficient") +
+  labs(title='External beta coefs - windows size = 40')
+
+
+## Save the plot with one of the following:
+ggsave('./Plots/Rolling_regression/Split_dataset/external_beta_traces_40.tiff',width = 7.5, height=12, units = 'cm')
+ggsave('./Plots/Rolling_regression/Split_dataset/external_beta_traces_12.tiff',width = 7.5, height=12, units = 'cm')
+ggsave('./Plots/Rolling_regression/Split_dataset/external_beta_traces_60.tiff',width = 7.5, height=12, units = 'cm')
+
+
+####### For the permutation test, the python packages mne, pandas and numpy are used:
+bigcoeffAction  %>% write.csv('./Analysis/lm_coeff_action.csv')
+bigcoeffExternal  %>% write.csv('./Analysis/lm_coeff_external_split.csv')
+
+############################################################################################
+
+### add line segments for significance (Computed using python-mne, and subsequently stored in lib/ folder!)
+sign_data = read.csv('lib/permtest_sign.csv')  %>% 
+  filter(winwidth==win)  %>% 
+  mutate( istart = tstart+win/2, 
+          iend   = tend+win/2)
+cfplt <- cfplt + geom_segment(
+  aes(x=istart, xend=iend, color=variable), y= -0.25, yend=-0.25, size=0.5*lsz, data=sign_data)
+cfplt
+
+
