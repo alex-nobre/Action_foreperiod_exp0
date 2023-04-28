@@ -19,10 +19,9 @@ library(data.table)
 library(codingMatrices)
 library(performance)
 
-setwd('G:/My Drive/Post-doc/Projetos/Action_foreperiod/Experimento_0')
 
 # Functions for raincloud plots
-source('./Analysis/Prepare_data_3.R')
+source('./Analysis/Prepare_data_4.R')
 
 
 #==========================================================================================#
@@ -65,6 +64,23 @@ ggplot(data=summaryData,
         panel.grid.minor=element_blank(),
         panel.background=element_blank())+
   scale_color_manual(values=c('orange','blue'))
+
+# 1.1.2. RTs across blocks by counterbalancing order
+ggplot(data=summaryData2,
+       aes(x=block,
+           y=meanRT,
+           color=counterbalance))+
+  stat_summary(fun='mean',geom='point')+
+  stat_summary(fun='mean',geom='line', linewidth=1, aes(group=counterbalance))+
+  stat_summary(fun.data='mean_cl_boot',width=0.2,geom='errorbar')+
+  theme(plot.title=element_text(size = rel(2), hjust = 0.5),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.background=element_blank(),
+        axis.text = element_text(size = rel(1.5)),
+        axis.title = element_text(size = rel(1.5)))+
+  scale_color_manual(values=c('blue','orange')) +
+  labs(title='RT by block split by counterbalancing order')
 
 # Check for influence of external fixation duration
 ggplot(data=filter(goData,condition=='external'),
