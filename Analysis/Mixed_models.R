@@ -469,7 +469,7 @@ isSingular(triminvfplmm5)
 formula(triminvfplmm5)
 
 
-triminvfplmm5 <- mixed(logRT ~  1 + numForeperiod + oneBackFP + numForeperiod:oneBackFP + 
+triminvfplmm5 <- mixed(invRT ~  1 + numForeperiod + oneBackFP + numForeperiod:oneBackFP + 
                          condition + numForeperiod:condition + oneBackFP:condition + 
                          numForeperiod:oneBackFP:condition + (1 + condition + numForeperiod | ID),
                        data=goData2,
@@ -489,6 +489,7 @@ update(pairs(Fp_by_Previous), by = NULL, adjust = "holm")
 Fp_by_Previous=emtrends(triminvfplmm5, c("condition", "oneBackFP"), var = "numForeperiod")
 Fp_by_Previous
 update(pairs(Fp_by_Previous), by = NULL, adjust = "none")
+
 
 #===================================================================================#
 # Sanity check: model comparisons without trimming
@@ -562,6 +563,32 @@ trimlogfplmm1 <- mixed(formula = logRT ~ 1 + numForeperiod + numOneBackFP + numF
 isSingular(trimlogfplmm1)
 
 summary(trimlogfplmm1)
+
+# RT as linear and FP and FP n-1 as categorical
+trimfplmm2 <- buildmer(RT ~ foreperiod * condition * oneBackFP + 
+                            (1+foreperiod*condition*oneBackFP|ID), 
+                          data=goData2,
+                          buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
+
+isSingular(trimfplmm2)
+formula(trimfplmm2)
+
+
+trimlogfplmm2 <- mixed(RT ~ 1 + foreperiod + oneBackFP + foreperiod:oneBackFP + condition + 
+                         foreperiod:condition + oneBackFP:condition + foreperiod:oneBackFP:condition + 
+                         (1 + condition | ID),
+                       data=goData2,
+                       control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                       progress = TRUE,
+                       expand_re = TRUE,
+                       method =  'KR',
+                       REML=TRUE,
+                       return = "merMod",
+                       check_contrasts = FALSE)
+
+summary(trimlogfplmm2)
+
+anova(trimlogfplmm2)
 
 #============================================================================================================#
 #=========================== 4. Difference between the durations of FP n and FP n-1 as predictor ==============
