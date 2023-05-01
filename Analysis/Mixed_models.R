@@ -537,8 +537,8 @@ cor(fitted(invfplmm3), goData$invRT)^2
 cor(fitted(invfplmm4), goData$invRT)^2
 
 #=================== Use logRT to get priors for next experiment =====================
-trimlogfplmm1 <- buildmer(formula = logRT ~ numForeperiod*condition*numOneBackFP + 
-                                  (1+numForeperiod*condition*numOneBackFP|ID),
+trimlogfplmm1 <- buildmer(formula = logRT ~ foreperiod*condition*oneBackFP + 
+                                  (1+foreperiod*condition*oneBackFP|ID),
                                 data = goData2,
                                 buildmerControl = list(#direction='backward',
                                   crit='LRT',#ddf = "Satterthwaite",
@@ -548,25 +548,25 @@ trimlogfplmm1 <- buildmer(formula = logRT ~ numForeperiod*condition*numOneBackFP
 formula(trimlogfplmm1)
 
 # Fit model manually
-trimlogfplmm1 <- mixed(formula = logRT ~ 1 + numForeperiod + numOneBackFP + numForeperiod:numOneBackFP + 
-                         condition + numForeperiod:condition + numOneBackFP:condition + 
-                         numForeperiod:numOneBackFP:condition + (1 + condition | ID),
-                             data = goData2,
-                             control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-                             progress = TRUE,
-                             expand_re = TRUE,
-                             method =  'S',
-                             REML=TRUE,
-                             return = "merMod",
-                             check_contrasts = FALSE)
+trimlogfplmm1 <- mixed(formula = logRT ~ 1 + foreperiod + oneBackFP + foreperiod:oneBackFP + condition + 
+                         foreperiod:condition + oneBackFP:condition + foreperiod:oneBackFP:condition + 
+                         (1 + condition | ID),
+                       data = goData2,
+                       control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                       progress = TRUE,
+                       expand_re = TRUE,
+                       method =  'S',
+                       REML=TRUE,
+                       return = "merMod",
+                       check_contrasts = FALSE)
 
 isSingular(trimlogfplmm1)
 
 summary(trimlogfplmm1)
 
 # RT as linear and FP and FP n-1 as categorical
-trimfplmm2 <- buildmer(RT ~ foreperiod * condition * oneBackFP + 
-                            (1+foreperiod*condition*oneBackFP|ID), 
+trimfplmm2 <- buildmer(RT ~ foreperiod * oneBackFP * condition + 
+                            (1+foreperiod * oneBackFP * condition|ID), 
                           data=goData2,
                           buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
 
@@ -574,9 +574,9 @@ isSingular(trimfplmm2)
 formula(trimfplmm2)
 
 
-trimlogfplmm2 <- mixed(RT ~ 1 + foreperiod + oneBackFP + foreperiod:oneBackFP + condition + 
-                         foreperiod:condition + oneBackFP:condition + foreperiod:oneBackFP:condition + 
-                         (1 + condition | ID),
+trimfplmm2 <- mixed(RT ~ 1 + foreperiod + oneBackFP + foreperiod:oneBackFP + condition + 
+                      foreperiod:condition + oneBackFP:condition + foreperiod:oneBackFP:condition + 
+                      (1 + condition | ID),
                        data=goData2,
                        control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
                        progress = TRUE,
@@ -586,9 +586,9 @@ trimlogfplmm2 <- mixed(RT ~ 1 + foreperiod + oneBackFP + foreperiod:oneBackFP + 
                        return = "merMod",
                        check_contrasts = FALSE)
 
-summary(trimlogfplmm2)
+summary(trimfplmm2)
 
-anova(trimlogfplmm2)
+anova(trimfplmm2)
 
 #============================================================================================================#
 #=========================== 4. Difference between the durations of FP n and FP n-1 as predictor ==============
