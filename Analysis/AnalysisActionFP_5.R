@@ -129,7 +129,7 @@ lines_by_condition <- ggplot(data = summaryData2,
        aes(x = foreperiod,
            y = meanRT,
            color = condition)) +
-  stat_summary(fun = "mean", geom = "point", linewidth = 1.5) +
+  stat_summary(fun = "mean", geom = "point") +
   stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group=condition)) +
   stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.2, geom = "errorbar") + 
   labs(title = "RT by condition",
@@ -269,13 +269,13 @@ nice(goAnova,
      correction='none')
 
 # Sequential effects (separated by condition)
-ggplot(data = summaryDataGo,
+ggplot(data = summaryData2,
        aes(x = foreperiod,
            y = meanRT,
            color=oneBackFP)) +
   stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", size = 0.8, aes(group = oneBackFP)) +
-  stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.2, geom = "errorbar") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = oneBackFP)) +
+  #stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.2, geom = "errorbar") +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(),
