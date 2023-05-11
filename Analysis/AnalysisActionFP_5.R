@@ -119,10 +119,12 @@ ggplot(data=summaryAccData,
 contrasts(summaryData$foreperiod) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2)
 contrasts(summaryData$condition) <- c(-1/2, 1/2)
 contrasts(summaryData$oneBackFP) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2)
+contrasts(summaryData$oneBackFPGo) <- contr.treatment(4)-matrix(rep(1/4,12),ncol=3)
 
 contrasts(summaryData2$foreperiod) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2)
 contrasts(summaryData2$condition) <- c(-1/2, 1/2)
 contrasts(summaryData2$oneBackFP) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2)
+contrasts(summaryData2$oneBackFPGo) <- contr.treatment(4)-matrix(rep(1/4,12),ncol=3)
 
 #==================== 2.1. FP x RT by condition ======================
 lines_by_condition <- ggplot(data = summaryData2,
@@ -189,6 +191,22 @@ fpEmmeansContrasts <- contrast(fpEmmeans[[1]],
                                adjust='bonferroni')
 
 #======================= 2.2. Sequential effects ============================
+# Sequential effects (separated by condition)
+ggplot(data = summaryData2,
+       aes(x = foreperiod,
+           y = meanRT,
+           color=oneBackFP)) +
+  stat_summary(fun = "mean", geom = "point", size = 1.5) +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = oneBackFP)) +
+  #stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.2, geom = "errorbar") +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(size = rel(1.5)),
+        axis.title = element_text(size = rel(1.5))) +
+  facet_wrap(~condition) +
+  scale_color_manual(values = c('blue', 'orange', 'green'))
+
 # 2.2.1. Anova for FP n-1
 seqEffAnova <- aov_ez(id = "ID",
                   dv = "meanRT",
@@ -268,22 +286,29 @@ goAnova <- aov_ez(id = "ID",
 nice(goAnova,
      correction='none')
 
-# Sequential effects (separated by condition)
+
+#================= 2.4. Condition and sequential effects including no-go FP n-1 =================
 ggplot(data = summaryData2,
        aes(x = foreperiod,
            y = meanRT,
-           color=oneBackFP)) +
+           color = oneBackFPGo)) +
   stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = oneBackFP)) +
-  #stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.2, geom = "errorbar") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.5)),
-        axis.title = element_text(size = rel(1.5))) +
-  facet_wrap(~condition) +
-  scale_color_manual(values = c('blue', 'orange', 'green'))
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = oneBackFPGo)) +
+  facet_wrap(~ condition) +
+  scale_color_manual(values = c("blue", "orange", "green", "magenta"))
+ggsave("./Analysis/Plots/seqEffNoGO.png")
 
+# Anova
+seqEffGoAnova <- aov_ez(id = "ID",
+                        dv = "meanRT",
+                        data = summaryData2,
+                        within = c("foreperiod", "oneBackFPGo", "condition"))
+
+nice(seqEffGoAnova,
+     correction='none')
+
+seqEffGoemm <- emmeans(seqEffGoAnova, pairwise ~ oneBackFPGo * condition| foreperiod)
+contrast(seqEffGoemm[[1]], interaction = c("consec", "pairwise"), by = "foreperiod")
 
 #==================== 2.4. Foreperiod, condition and block ======================
 blocklm <- lm(meanRT ~ foreperiod * counterbalance * block,

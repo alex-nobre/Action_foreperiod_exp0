@@ -72,12 +72,19 @@ data <- data %>%
          ) %>%
   mutate(oneBackFPDiff = as.factor(oneBackFPDiff)) %>%
   mutate(oneBackFPDiff=forcats::fct_relevel(oneBackFPDiff, c("no-go", "-1", "0", "1")))
-  
 
+# Column for FP n-1 including no-go
+data <- data %>%
+  mutate(oneBackFPGo = factor(case_when(oneBacktrialType == "no-go" ~ "no-go",
+                                 oneBackFP == "600" ~ "600",
+                                 oneBackFP == "1200" ~ "1200",
+                                 oneBackFP == "1800" ~ "1800")))
+
+data$oneBackFPGo <- forcats::fct_relevel(data$oneBackFPGo, c("600", "1200", "1800", "no-go"))
+  
 # Remove trials without n-1 FP values (i.e., first of each block)
 goData <- data %>%
   filter(!is.na(oneBackFP), !is.na(twoBackFP))
-#filter(!is.na(oneBackFP))
 
 # Keep only go trials with correct responses to analyze RT
 goData <- goData %>%
@@ -121,7 +128,7 @@ goData <- goData %>%
 summaryData <- goData %>%
   group_by(ID,foreperiod,logFP,condition,
            oneBackFP,twoBackFP,oneBackFPDiff,
-           oneBacktrialType,
+           oneBacktrialType, oneBackFPGo,
            block,counterbalance) %>%
   summarise(meanRT = mean(RT),
             meanLogRT = mean(logRT),
@@ -145,7 +152,7 @@ summaryData <- goData %>%
 summaryData2 <- goData2 %>%
   group_by(ID,foreperiod,logFP,condition,
            oneBackFP,twoBackFP,oneBackFPDiff,
-           oneBacktrialType,
+           oneBacktrialType, oneBackFPGo,
            block,counterbalance) %>%
   summarise(meanRT = mean(RT),
             meanLogRT = mean(logRT),
