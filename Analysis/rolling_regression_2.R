@@ -7,8 +7,7 @@
 # Uses RT instead of inverse RT
 #===================================================================================#
 
-setwd('G:/My Drive/Post-doc/Projetos/Action_foreperiod/Experimento 1/')
-source('./Analysis/Prepare_data.R')
+source('./Analysis/Prepare_data_4.R')
 source('./Analysis/plot_theme.R')
 
 # Load packages

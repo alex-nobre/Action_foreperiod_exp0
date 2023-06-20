@@ -1,17 +1,22 @@
-setwd('D:/1Documentos/Downloads')
+
 
 # Calculate sd point-by-point in (time)series
 
-data <- read.csv('lm_coeff_external_split.csv')
+data <- read.csv('./Analysis/lm_coeff_external_split.csv')
 
 str(data)
 data$ID = as.factor(data$ID)
+data$idx = as.factor(data$idx)
 
 library(ggplot2)
 
 ggplot(data, aes(x=idx, y= intercept, group = ID, color = ID))+
     geom_line()
 #z[, c("a", "b")]
+
+data_wide <- data %>%
+  pivot_wider(names_from = variable,
+              values_from = value)
 
 datatemp = data[,c('ID','intercept', 'idx')]
 

@@ -13,8 +13,7 @@
 # Does not subtract first value from each coefficient
 #===================================================================#
 
-setwd('G:/My Drive/Post-doc/Projetos/Action_foreperiod/Experimento_0/')
-source('./Analysis/Prepare_data_3.R')
+source('./Analysis/Prepare_data_4.R')
 source('./Analysis/plot_theme.R')
 
 # Load packages

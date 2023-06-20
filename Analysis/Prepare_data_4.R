@@ -83,20 +83,49 @@ data <- data %>%
 data$oneBackFPGo <- forcats::fct_relevel(data$oneBackFPGo, c("600", "1200", "1800", "no-go"))
   
 # Remove trials without n-1 FP values (i.e., first of each block)
-goData <- data %>%
+data <- data %>%
   filter(!is.na(oneBackFP), !is.na(twoBackFP))
 
+# Save data with error trials to assess accuracy
+dataAll <- data
+
 # Keep only go trials with correct responses to analyze RT
-goData <- goData %>%
+goData <- data %>%
   filter(trialType == 'go', !is.na(RT), Acc == 1)
 
 # Coerce foreperiod and FP n-1 back to numeric
 goData$numForeperiod <- as.numeric(as.character(goData$foreperiod))
 goData$numOneBackFP <- as.numeric(as.character(goData$oneBackFP))
 
-# Create log10 of continuous indenpendent variables
+dataAll$numForeperiod <- as.numeric(as.character(dataAll$foreperiod))
+dataAll$numOneBackFP <- as.numeric(as.character(dataAll$oneBackFP))
+
+# Create log10 of continuous independent variables
+goData$numLogFP <- log10(goData$numForeperiod)
 goData$logFP <- log10(goData$numForeperiod)
 goData$logOneBackFP <- log10(goData$numOneBackFP)
+
+dataAll$numLogFP <- log10(dataAll$numForeperiod)
+dataAll$logFP <- log10(dataAll$numForeperiod)
+dataAll$logOneBackFP <- log10(dataAll$numOneBackFP)
+
+# Create quadratic values of continuous predictors
+goData$squaredNumForeperiod <-  (goData$numForeperiod)^2
+goData$numOneBackFP <- (goData$numOneBackFP)^2
+goData$scaledNumForeperiod <-  scale(goData$numForeperiod)[,1]
+goData$squaredScaledNumForeperiod <- (goData$scaledNumForeperiod)^2
+goData$scaledNumOneBackFP <- scale(goData$numOneBackFP)[,1]
+
+dataAll$squaredNumForeperiod <-  (dataAll$numForeperiod)^2
+dataAll$numOneBackFP <- (dataAll$numOneBackFP)^2
+dataAll$scaledNumForeperiod <-  scale(dataAll$numForeperiod)[,1]
+dataAll$squaredScaledNumForeperiod <- (dataAll$scaledNumForeperiod)^2
+dataAll$scaledNumOneBackFP <- scale(dataAll$numOneBackFP)[,1]
+
+# Factor version of accuracy
+goData$acc_result <- as.factor(goData$Acc)
+
+dataAll$acc_result <- as.factor(dataAll$Acc)
 
 # Remove extreme values
 goData <- goData %>%
@@ -107,7 +136,7 @@ goData <- goData %>%
 goData$logRT <- ifelse(!is.na(goData$RT), log10(goData$RT), NA) # log-transform
 goData$invRT <- ifelse(!is.na(goData$RT), 1/goData$RT, NA)
 
-# Trimming
+# RT Trimming
 goData2 <- goData %>%
   group_by(ID) %>%
   mutate(RTzscore=ifelse(!is.na(RT), compute_zscore(RT), NA),
@@ -115,7 +144,7 @@ goData2 <- goData %>%
   filter(abs(logRTzscore) < 3) %>%
   ungroup()
 
-# No trimming
+# No RT trimming
 goData <- goData %>%
   group_by(ID) %>%
   mutate(RTzscore=ifelse(!is.na(RT), compute_zscore(RT), NA),
@@ -172,6 +201,21 @@ summaryData2 <- goData2 %>%
          scaledNumOneBackFP = scale(numOneBackFP)[,1],
          scaledNumOneBackFPDiff = scale(numOneBackFPDiff)[,1],
          squaredScaledNumOneBackFPDiff = scaledNumOneBackFPDiff^2)
+
+
+summaryDataAll <- dataAll %>%
+  group_by(ID,foreperiod,condition,
+           oneBackFP, oneBacktrialType, oneBackFPGo) %>%
+  summarise(meanRT = mean(RT),
+            meanAcc = mean(Acc),
+            meanSeqEff = mean(oneBackEffect)) %>%
+  ungroup() %>%
+  mutate(numForeperiod = as.numeric(as.character(foreperiod)),
+         numOneBackFP = as.numeric(as.character(oneBackFP))) %>%
+  mutate(squaredNumForeperiod = numForeperiod^2,
+         scaledNumForeperiod = scale(numForeperiod)[,1],
+         squaredScaledNumForeperiod = scaledNumForeperiod^2,
+         scaledNumOneBackFP = scale(numOneBackFP)[,1])
 
 #write_csv(goData, "./Analysis/goData.csv")
 #write_csv(goData2, "./Analysis/goData2.csv")

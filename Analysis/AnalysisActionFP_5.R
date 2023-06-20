@@ -18,6 +18,7 @@ library(car)
 library(data.table)
 library(codingMatrices)
 library(performance)
+library(ggsignif)
 
 
 # Functions for raincloud plots
@@ -133,7 +134,7 @@ lines_by_condition <- ggplot(data = summaryData2,
            color = condition)) +
   stat_summary(fun = "mean", geom = "point") +
   stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.2, geom = "errorbar") + 
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.2, geom = "errorbar") + 
   labs(title = "RT by condition",
        x = "Foreperiod",
        y = "Mean RT") +
@@ -147,6 +148,7 @@ lines_by_condition <- ggplot(data = summaryData2,
 
 ggplot2::ggsave("./Analysis/Plots/RT_by_condition.png",
                 lines_by_condition)
+
 
 fpAnova <- aov_ez(id = "ID",
        dv = "meanRT",
@@ -191,6 +193,7 @@ fpEmmeansContrasts <- contrast(fpEmmeans[[1]],
                                adjust='bonferroni')
 
 #======================= 2.2. Sequential effects ============================
+#========== 2.2.1. RT ============
 # Sequential effects (separated by condition)
 ggplot(data = summaryData2,
        aes(x = foreperiod,
@@ -198,14 +201,48 @@ ggplot(data = summaryData2,
            color=oneBackFP)) +
   stat_summary(fun = "mean", geom = "point", size = 1.5) +
   stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = oneBackFP)) +
-  #stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.2, geom = "errorbar") +
-  theme(panel.grid.major = element_blank(),
+  stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.1, geom = "errorbar") +
+  labs(title = "Sequential effects by condition",
+       x = "Foreperiod",
+       y = "Mean RT",
+       color = "FP n-1") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.5)),
-        axis.title = element_text(size = rel(1.5))) +
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.2))) +
   facet_wrap(~condition) +
   scale_color_manual(values = c('blue', 'orange', 'green'))
+ggsave("./Analysis/Plots/SeqEff.png",
+       width = 6.7,
+       height = 5)
+
+
+ggplot(data = summaryData2,
+       aes(x = oneBackFP,
+           y = meanRT,
+           color=condition)) +
+  stat_summary(fun = "mean", geom = "point", size = 1.5) +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = condition)) +
+  stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.1, geom = "errorbar") +
+  labs(title = "FP n-1 x condition",
+       x = "FP n-1",
+       y = "Mean RT",
+       color = "Condition") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.2))) +
+  scale_color_manual(values = c("orange", "blue"))
+ggsave("./Analysis/Plots/onebackxCondition.png",
+       width = 6.7,
+       height = 5)
+
+
+
 
 # 2.2.1. Anova for FP n-1
 seqEffAnova <- aov_ez(id = "ID",
@@ -215,7 +252,7 @@ seqEffAnova <- aov_ez(id = "ID",
 
 seqEffAnova <- aov_ez(id = "ID",
                       dv = "meanInvRT",
-                      data = summaryData,
+                      data = summaryData2,
                       within = c("foreperiod", "condition", "oneBackFP"))
 
 nice(seqEffAnova,
@@ -236,14 +273,142 @@ fpDiffRegression <- lm(meanRT ~ foreperiod * condition * oneBackFPDiff,
 summary(fpDiffRegression)
 anova(fpDiffRegression)
 
-# 2.2.3. Anova for FP n-2
-ntworegression <- lm(meanRT ~ foreperiod * oneBackFP * twoBackFP, 
-                     data = summaryData)
-summary(ntworegression)
-anova(ntworegression)
-Anova(ntworegression, type = "II")
+# Sequential effects of FP n-2
+ggplot(data = summaryData2,
+       aes(x = foreperiod,
+           y = meanRT,
+           color=twoBackFP)) +
+  stat_summary(fun = "mean", geom = "point", size = 1.5) +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = twoBackFP)) +
+  stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.1, geom = "errorbar") +
+  labs(title = "Sequential effects of FP n-2 by condition",
+       x = "Foreperiod",
+       y = "Mean RT",
+       color = "FP n-2") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.2))) +
+  facet_wrap(~condition) +
+  scale_color_manual(values = c('blue', 'orange', 'green'))
+ggsave("./Analysis/Plots/SeqEffTwoBack.png",
+       width = 6.7,
+       height = 5)
 
-#================= 2.3. N-1 trial type, condition and sequential effects =================
+# Anova for FP n-2
+seqEfffp2Anova <- aov_ez(id = "ID",
+                      dv = "meanRT",
+                      data = summaryData2,
+                      within = c("foreperiod", "condition", "twoBackFP"))
+
+seqEffffp2Anova <- aov_ez(id = "ID",
+                      dv = "meanInvRT",
+                      data = summaryData2,
+                      within = c("foreperiod", "condition", "oneBackFP"))
+
+
+nice(seqEfffp2Anova,
+     correction='none')
+
+#=================== 2.2.2. Accuracy ==========================
+# Set constrasts for variables used in ANOVAs
+contrasts(summaryDataAll$foreperiod) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2)
+contrasts(summaryDataAll$condition) <- c(-1/2, 1/2)
+contrasts(summaryDataAll$oneBackFP) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2)
+contrasts(summaryDataAll$oneBackFPGo) <- contr.treatment(4)-matrix(rep(1/4,12),ncol=3)
+
+ggplot(data = summaryDataAll,
+       aes(x = foreperiod,
+           y = meanAcc,
+           color = condition)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = condition)) +
+  stat_summary(fun.data = "mean_cl_boot", geom = "errorbar", width = 0.05, linewidth = 0.7) +
+  scale_color_manual(values = c("orange", "blue")) +
+  labs(x = "Foreperiod",
+       y = "Mean Acc", 
+       color = "Condition")
+ggsave("./Analysis/Plots/acc_by_condition.png",
+       width = 7.5,
+       height = 5)
+
+ggplot(data = summaryDataAll,
+       aes(x = foreperiod,
+           y = meanAcc,
+           color = oneBackFP)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", aes(group = oneBackFP)) +
+  facet_wrap(~ condition)
+
+
+ggplot(data = summaryDataAll,
+       aes(x = foreperiod,
+           y = meanAcc,
+           color = oneBackFPGo)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", aes(group = oneBackFPGo)) +
+  facet_wrap(~ condition)
+
+ggplot(data = summaryDataAll,
+       aes(x = foreperiod,
+           y = meanAcc,
+           color = oneBackFP)) +
+  geom_jitter()
+
+ggplot(data = summaryDataAll) +
+  geom_histogram(aes(x = meanAcc)) +
+  facet_grid(foreperiod ~ condition)
+
+AccAnova <- aov_ez(id = "ID",
+                   dv = "meanAcc",
+                   data = summaryDataAll,
+                   within = c("foreperiod", "condition", "oneBackFPGo"))
+
+
+#================= 2.2.3. N-1 trial type, condition and sequential effects =================
+ggplot(data = summaryData2,
+       aes(x = oneBacktrialType,
+           y = meanRT,
+           color=condition)) +
+  stat_summary(fun = "mean", geom = "point", size = 1.5) +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = condition)) +
+  stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.1, geom = "errorbar") +
+  labs(x = "FP n-1 trial type",
+       y = "Mean RT",
+       color = "Condition") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.2))) +
+  facet_wrap(~foreperiod) +
+  scale_color_manual(values = c('orange', 'blue'))
+ggsave("./Analysis/Plots/oneBackTrialType.png",
+       width = 7.5,
+       height = 5)
+
+ggplot(data = summaryData2,
+       aes(x = foreperiod,
+           y = meanRT,
+           color=oneBackFP)) +
+  stat_summary(fun = "mean", geom = "point", size = 1.5) +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = oneBackFP)) +
+  stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.1, geom = "errorbar") +
+  labs(x = "Foreperiod",
+       y = "Mean RT",
+       color = "FP n-1") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.2))) +
+  facet_grid(oneBacktrialType ~ condition) +
+  scale_color_manual(values = c("blue", "orange", "green"))
+
 # 2.3.1. Anova with foreperiod, condition and n-1 trial type
 trialTypeAnova <- aov_ez(id = "ID",
                       dv = "meanRT",
@@ -266,7 +431,7 @@ nice(seqEfftrialTypeAnova,
 # 2.3.3. Anova with foreperiod, condition, n-1 trial type and sequential effects
 fullAnova <- aov_ez(id = "ID",
                     dv = "meanRT",
-                    data = summaryData,
+                    data = summaryData2,
                     within = c("foreperiod", "condition",
                                "oneBackFP", "oneBacktrialType"))
 
@@ -294,8 +459,19 @@ ggplot(data = summaryData2,
            color = oneBackFPGo)) +
   stat_summary(fun = "mean", geom = "point", size = 1.5) +
   stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = oneBackFPGo)) +
+  stat_summary(fun.data = "mean_cl_boot", geom = "errorbar", width = 0.1) +
   facet_wrap(~ condition) +
-  scale_color_manual(values = c("blue", "orange", "green", "magenta"))
+  scale_color_manual(values = c("blue", "orange", "green", "magenta")) +
+  labs(x = "Foreperiod",
+       y = "Mean RT",
+       color = "FP n-1") +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.2)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.2)))
 ggsave("./Analysis/Plots/seqEffNoGO.png")
 
 # Anova
@@ -322,6 +498,14 @@ Anova(blocklm)
 #==========================================================================================#
 
 #=========================== 3.1. Foreperiod, condition and sequential effects =============================
+
+fplmm1 <- buildmer(invRT ~ numForeperiod * condition * numOneBackFP + 
+                     (1+numForeperiod*condition*numOneBackFP|ID), 
+                   data=data2,
+                   buildmerControl = list(direction='backward',
+                                          crit='LRT',#ddf = "Satterthwaite",
+                                          family=gaussian(link = 'identity'),
+                                          calc.anova = TRUE))
 
 # ============ 3.1.1. n-1 sequential effect =============
 # 3.1.1.1 Fullest model
@@ -772,18 +956,4 @@ histograms <- ggplot(data=goData,
         panel.background = element_blank()) +
   facet_wrap(~ID)
 
-
-ggplot(data = summaryData,
-       aes(x = foreperiod,
-           y = meanLogRT,
-           color = condition)) +
-  stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", size = 1, aes(group = condition)) +
-  stat_summary(fun.data = "mean_cl_boot", width = 0.2, geom = "errorbar") +
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.5)),
-        axis.title = element_text(size = rel(1.5))) +
-  scale_color_manual(values = c("orange", "blue"))
 

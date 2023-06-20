@@ -17,4 +17,4 @@ myscales <- list(shpscale, colcat, fillcat)
 # define a 'theme'
 mytheme	 <- theme_classic() + theme(
   legend.position = c(1,1), legend.justification = c(1,1), legend.direction = 'horizontal', 
-  panel.grid.major.y=element_line(linetype='dotted',color='black',size=0.25*lsz))
+  panel.grid.major.y=element_line(linetype='dotted',color='black',linewidth=0.25*lsz))

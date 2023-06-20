@@ -8,13 +8,9 @@
 # Thus, here we only extract coefficients for the first half of the 
 # experiment, in which they have not been exposed to different conditions
 # before
-
-# Changes:
-# Uses RT instead of inverse RT
 #===================================================================#
 
-setwd('G:/My Drive/Post-doc/Projetos/Action_foreperiod/Experimento_0/')
-source('./Analysis/Prepare_data_3.R')
+source('./Analysis/Prepare_data_4.R')
 source('./Analysis/plot_theme.R')
 
 # Load packages
@@ -55,9 +51,9 @@ regr_fun <- function(z) {
   dd <- z  %>% as.data.frame
   # center
   dd$numForeperiod %<>% as.character  %>% as.numeric %>% subtract(1.2)
-  dd$RT %<>% as.character  %>% as.numeric
+  dd$invRT %<>% as.character  %>% as.numeric
   dd$numOneBackFP %<>% as.character  %>% as.numeric %>% subtract(1.2)
-  mod <- lm(RT ~ numForeperiod*numOneBackFP, data=dd, na.action = 'na.omit')
+  mod <- lm(invRT ~ numForeperiod*numOneBackFP, data=dd, na.action = 'na.omit')
   return(coef(mod))
 }
 
@@ -93,9 +89,9 @@ goData4 <- goData3 %>%
   filter(counterbalance=='action-external')
 
 ## Apply lm with rolling window get beta-timecourses
-goData4  %>% mutate(RT = ifelse(Acc==1,RT,NA), 
-                    RT = ifelse(outlier==FALSE, RT, NA),
-                    RT = ifelse(!is.na(numOneBackFP), RT, NA))  %>% 
+goData4  %>% mutate(invRT = ifelse(Acc==1,invRT,NA), 
+                    invRT = ifelse(outlier==FALSE, invRT, NA),
+                    invRT = ifelse(!is.na(numOneBackFP), invRT, NA))  %>% 
   group_by(ID) %>%
   mutate(trial_idx=seq(n()))  %>% 
   do( rollapply(., width = win,
@@ -146,7 +142,7 @@ cfPlotAction <- bigcoeffAction %>%
   geom_hline(yintercept=0.0, size=lsz*.25, color='black') + 
   geom_line(aes(color=variable), size=lsz) + mytheme +
   theme(legend.position='none', legend.justification = c(1,0)) + 
-  colbetas + fillbetas + facet_rep_grid(variable~.) + ylim(-.05,.05) + xlim(-1,300) +
+  colbetas + fillbetas + facet_rep_grid(variable~.) + ylim(-.40,.40) + xlim(-1,300) +
   xlab("Trial") + ylab("beta coefficient") +
   labs(title='Action beta coefs - windows size = 40')
 
@@ -170,9 +166,9 @@ goData5 <- goData3 %>%
   filter(counterbalance=='external-action')
 
 ## Apply lm with rolling window get beta-timecourses
-goData5  %>% mutate(RT = ifelse(Acc==1,RT,NA), 
-                    RT = ifelse(outlier==FALSE, RT, NA),
-                    RT = ifelse(!is.na(numOneBackFP), RT, NA))  %>% 
+goData5  %>% mutate(invRT = ifelse(Acc==1,invRT,NA), 
+                    invRT = ifelse(outlier==FALSE, invRT, NA),
+                    invRT = ifelse(!is.na(numOneBackFP), invRT, NA))  %>% 
   group_by(ID) %>%
   mutate(trial_idx=seq(n()))  %>% 
   do( rollapply(., width = win,
@@ -224,7 +220,7 @@ cfPlotExternal <- bigcoeffExternal %>%
   geom_hline(yintercept=0.0, size=lsz*.25, color='black') + 
   geom_line(aes(color=variable), size=lsz) + mytheme +
   theme(legend.position='none', legend.justification = c(1,0)) + 
-  colbetas + fillbetas + facet_rep_grid(variable~.) + ylim(-.05,.05) + xlim(-1,300) +
+  colbetas + fillbetas + facet_rep_grid(variable~.) + ylim(-.40,.40) + xlim(-1,300) +
   xlab("Trial") + ylab("beta coefficient") +
   labs(title='External beta coefs - windows size = 40')
 

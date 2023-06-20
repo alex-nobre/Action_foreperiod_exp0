@@ -12,3 +12,5 @@ Analysis/Plots
 .httr-oauth
 .DS_Store
 Data
+Modeling/fMTP/Grid_search/Plots
+Modeling/fMTP/Fitting/Plots
