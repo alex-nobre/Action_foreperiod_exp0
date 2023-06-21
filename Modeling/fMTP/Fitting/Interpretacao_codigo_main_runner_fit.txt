@@ -1,0 +1,21 @@
+função temp2RT: geração de RTs
+
+- toma valores de razão I/A
+- insere-os na equação 9
+- calcula a sum of squared error (soma dos quadrados da diferença 
+entre RTs empírios e RTs simulados)
+
+
+sse: encontra os coeficientes, usando
+
+- dados empíricos (emp)
+- preparação simulada por tentativa (sim)
+- curvas de preparação médias (prep)
+
+sim_dist: encontra a preparação; chamada por run_dist
+
+
+
+
+
+
