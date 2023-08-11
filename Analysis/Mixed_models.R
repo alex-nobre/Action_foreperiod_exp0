@@ -1,10 +1,8 @@
 
 
 # Load necessary packages
-library(readr)
-library(ggplot2)
+library(tidyverse)
 library(magrittr)
-library(dplyr)
 library(lattice)
 library(afex)
 library(emmeans)
@@ -16,6 +14,12 @@ library(tidyr)
 library(janitor)
 library(broom.mixed)
 
+
+# Save defaults
+graphical_defaults <- par()
+options_defaults <- options() 
+
+# Read data
 source('./Analysis/Prepare_data_4.R')
 
 #==========================================================================================#
@@ -615,10 +619,10 @@ ggsave("./Analysis/Plots/mixed_models_pairwise.png",
 trimfplmm7emm <- emmeans(trimfplmm7, ~ oneBackFP * condition|foreperiod)
 
 trimfplmm7emm <- emmeans(trimfplmm7, pairwise ~ oneBackFP * condition|foreperiod)
-contrast(trimfplmm7emm[[1]], interaction = c("consec", "consec"), by = "foreperiod", adjust = "none")
+contrast(trimfplmm7emm[[1]], interaction = c("consec", "consec"), by = "foreperiod", adjust = "holm")
 
-contrast(trimfplmm3emm[[1]], interaction = c("consec"), by = c("foreperiod", "oneBackFP"), adjust = "none")
-contrast(trimfplmm3emm[[1]], interaction = c("consec"), by = c("foreperiod", "condition"), adjust = "none")
+contrast(trimfplmm7emm[[1]], interaction = c("consec"), by = c("foreperiod", "oneBackFP"), adjust = "holm")
+contrast(trimfplmm7emm[[1]], interaction = c("consec"), by = c("foreperiod", "condition"), adjust = "holm")
 
 #===================================================================================#
 # Sanity check: model comparisons without trimming
@@ -860,6 +864,7 @@ trimfplmmtrialtype2 <- mixed(RT ~ 1 + foreperiod + oneBackFPGo + foreperiod:oneB
                                 return = "merMod",
                                 check_contrasts = FALSE)
 
+
 summary(trimfplmmtrialtype2)
 
 anova(trimfplmmtrialtype2)
@@ -979,6 +984,8 @@ trimfplmmtrialtype4 <- mixed(RT ~ 1 + foreperiod + oneBackFP + foreperiod:oneBac
                              REML=TRUE,
                              return = "merMod",
                              check_contrasts = FALSE)
+
+
 
 summary(trimfplmmtrialtype4)
 

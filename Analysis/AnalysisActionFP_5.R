@@ -21,7 +21,11 @@ library(performance)
 library(ggsignif)
 
 
-# Functions for raincloud plots
+# Save defaults
+graphical_defaults <- par()
+options_defaults <- options() 
+
+# Read data
 source('./Analysis/Prepare_data_4.R')
 
 
@@ -89,7 +93,17 @@ ggplot(data=filter(goData,condition=='external'),
            y=RT,
            color=foreperiod))+
   geom_point() +
+  theme(axis.text = element_text(size = rel(1.5)),
+        axis.title = element_text(size = rel(1.8)),
+        strip.text = element_text(size = rel(1.8)),
+        legend.text = element_text(size = rel(1.5)),
+        legend.title = element_text(size = rel(1.8))) +
+  labs(x = "External fixation duration",
+       y = "RT") +
   facet_wrap(~foreperiod)
+ggsave("./Analysis/Plots/extfixduration.tiff",
+       width = 13.4,
+       height = 10)
 
 # Check for influence of latency of action key press on RT
 ggplot(data=filter(goData,condition=='action'),
@@ -97,8 +111,18 @@ ggplot(data=filter(goData,condition=='action'),
            y=RT,
            color=foreperiod))+
   geom_point() +
+  theme(axis.text = element_text(size = rel(1.5)),
+        axis.title = element_text(size = rel(1.8)),
+        strip.text = element_text(size = rel(1.8)),
+        legend.text = element_text(size = rel(1.5)),
+        legend.title = element_text(size = rel(1.8))) +
+  labs(x = "Action trigger delay",
+       y = "RT") +
   facet_wrap(~foreperiod)
-
+ggsave("./Analysis/Plots/actiontrigpress.tiff",
+         width = 13.4,
+         height = 10)
+  
 # Accuracy
 summaryAccData <- data %>%
   group_by(ID,foreperiod,condition) %>%
@@ -146,14 +170,16 @@ lines_by_condition <- ggplot(data = summaryData2,
         axis.title = element_text(size = rel(1.2))) +
   scale_color_manual(values = c("orange", "blue"))
 
+
 ggplot2::ggsave("./Analysis/Plots/RT_by_condition.png",
                 lines_by_condition)
 
-
+# Anova with RT
 fpAnova <- aov_ez(id = "ID",
        dv = "meanRT",
        data = summaryData2,
        within = c("foreperiod", "condition"))
+
 
 check_sphericity(fpAnova)
 
@@ -192,6 +218,49 @@ fpEmmeansContrasts <- contrast(fpEmmeans[[1]],
                                interaction=c('consec'),
                                adjust='bonferroni')
 
+
+# log FP
+ggplot(data = summaryData2,
+       aes(x = foreperiod,
+           y = meanLogRT,
+           color = condition)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.2, geom = "errorbar") + 
+  labs(title = "LogRT by condition",
+       x = "Foreperiod",
+       y = "Mean LogRT") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.2))) +
+  scale_color_manual(values = c("orange", "blue"))
+
+ggplot(data = summaryData2,
+       aes(x = condition,
+           y = meanLogRT)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group=1)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.2, geom = "errorbar") + 
+  labs(title = "LogRT by condition",
+       x = "condition",
+       y = "Mean LogRT") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.2)))
+
+logFPAnova <- aov_ez(id = "ID",
+                     dv = "meanLogRT",
+                     data = summaryData2,
+                     within = c("foreperiod", "condition"))
+
+logFPAnova
+
 #======================= 2.2. Sequential effects ============================
 #========== 2.2.1. RT ============
 # Sequential effects (separated by condition)
@@ -201,7 +270,7 @@ ggplot(data = summaryData2,
            color=oneBackFP)) +
   stat_summary(fun = "mean", geom = "point", size = 1.5) +
   stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = oneBackFP)) +
-  stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.1, geom = "errorbar") +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.1, geom = "errorbar") +
   labs(title = "Sequential effects by condition",
        x = "Foreperiod",
        y = "Mean RT",
@@ -218,7 +287,7 @@ ggsave("./Analysis/Plots/SeqEff.png",
        width = 6.7,
        height = 5)
 
-
+# Only FP n-1 (no FP)
 ggplot(data = summaryData2,
        aes(x = oneBackFP,
            y = meanRT,
@@ -242,8 +311,6 @@ ggsave("./Analysis/Plots/onebackxCondition.png",
        height = 5)
 
 
-
-
 # 2.2.1. Anova for FP n-1
 seqEffAnova <- aov_ez(id = "ID",
                   dv = "meanRT",
@@ -254,6 +321,8 @@ seqEffAnova <- aov_ez(id = "ID",
                       dv = "meanInvRT",
                       data = summaryData2,
                       within = c("foreperiod", "condition", "oneBackFP"))
+
+
 
 nice(seqEffAnova,
      correction='none')
@@ -329,10 +398,17 @@ ggplot(data = summaryDataAll,
   scale_color_manual(values = c("orange", "blue")) +
   labs(x = "Foreperiod",
        y = "Mean Acc", 
-       color = "Condition")
+       color = "Condition") +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(size = rel(1.8)),
+        axis.title = element_text(size = rel(1.8)),
+        legend.text = element_text(size = rel(1.5)),
+        legend.title = element_text(size = rel(1.8)))
 ggsave("./Analysis/Plots/acc_by_condition.png",
-       width = 7.5,
-       height = 5)
+       width = 15,
+       height = 10)
 
 ggplot(data = summaryDataAll,
        aes(x = foreperiod,
@@ -404,10 +480,36 @@ ggplot(data = summaryData2,
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.2))) +
+        axis.text = element_text(size = rel(1.5)),
+        axis.title = element_text(size = rel(1.8)),
+        strip.text = element_text(size = rel(1.8)),
+        legend.text = element_text(size = rel(1.5)),
+        legend.title = element_text(size = rel(1.8))) +
   facet_grid(oneBacktrialType ~ condition) +
   scale_color_manual(values = c("blue", "orange", "green"))
+ggsave("./Analysis/Plots/RT_condition_trialtype.png",
+       width = 13.4,
+       height = 10)
+
+ggplot(data = summaryData2,
+       aes(x = foreperiod,
+           y = meanRT,
+           color = oneBackFP)) +
+  stat_summary(fun = "mean", geom = "point", size = 1.5) +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = oneBackFP)) +
+  stat_summary(fun.data = "mean_cl_boot", geom = "errorbar", width = 0.1) +
+  facet_wrap(oneBacktrialType ~ condition) +
+  scale_color_manual(values = c("blue", "orange", "green")) +
+  labs(x = "Foreperiod",
+       y = "Mean RT",
+       color = "FP n-1") +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.2)),
+        legend.text = element_text(size = rel(1.2)),
+        legend.title = element_text(size = rel(1.2)))
 
 # 2.3.1. Anova with foreperiod, condition and n-1 trial type
 trialTypeAnova <- aov_ez(id = "ID",
@@ -474,6 +576,7 @@ ggplot(data = summaryData2,
         legend.title = element_text(size = rel(1.2)))
 ggsave("./Analysis/Plots/seqEffNoGO.png")
 
+
 # Anova
 seqEffGoAnova <- aov_ez(id = "ID",
                         dv = "meanRT",
@@ -486,6 +589,7 @@ nice(seqEffGoAnova,
 seqEffGoemm <- emmeans(seqEffGoAnova, pairwise ~ oneBackFPGo * condition| foreperiod)
 contrast(seqEffGoemm[[1]], interaction = c("consec", "pairwise"), by = "foreperiod")
 
+
 #==================== 2.4. Foreperiod, condition and block ======================
 blocklm <- lm(meanRT ~ foreperiod * counterbalance * block,
               data = summaryData)
@@ -493,137 +597,6 @@ blocklm <- lm(meanRT ~ foreperiod * counterbalance * block,
 anova(blocklm)
 Anova(blocklm)
 
-#==========================================================================================#
-#====================================== 3. Mixed models ====================================
-#==========================================================================================#
-
-#=========================== 3.1. Foreperiod, condition and sequential effects =============================
-
-fplmm1 <- buildmer(invRT ~ numForeperiod * condition * numOneBackFP + 
-                     (1+numForeperiod*condition*numOneBackFP|ID), 
-                   data=data2,
-                   buildmerControl = list(direction='backward',
-                                          crit='LRT',#ddf = "Satterthwaite",
-                                          family=gaussian(link = 'identity'),
-                                          calc.anova = TRUE))
-
-# ============ 3.1.1. n-1 sequential effect =============
-# 3.1.1.1 Fullest model
-fplmm1 <- mixed(formula = RT ~ numForeperiod*condition*numOneBackFP + 
-                 (1+numForeperiod*condition*numOneBackFP|ID),
-               data = goData,
-               control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-               progress = TRUE,
-               expand_re = TRUE,
-               method =  'S',
-               REML=TRUE)
-
-fplmm1v2 <- lmer(RT ~ numForeperiod*condition*numOneBackFP + 
-                   (1+numForeperiod*condition*numOneBackFP||ID),
-                 data=goData,
-                 contrasts = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-                 REML=TRUE)
-
-fplmm1v3 <- lmer(RT ~ numForeperiod*condition*numOneBackFP + 
-                   (1+numForeperiod+condition+numOneBackFP||ID),
-                 data=goData,
-                 contrasts = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-                 REML=TRUE)
-
-
-# ============ 3.1.2. difference between the durations of FPn and FPn-1 as regressor ===========
-# 3.1.1.1 Fullest model
-fpDifflmm1 <- mixed(formula = RT ~ foreperiod * condition * oneBackFPDiff + 
-                  (1+foreperiod*condition*oneBackFPDiff|ID),
-                data = goData,
-                control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-                progress = TRUE,
-                expand_re = TRUE,
-                method =  'S',
-                REML=TRUE)
-
-fpDifflmm2 <- mixed(formula = RT ~ foreperiod * condition * oneBackFPDiff + 
-                      (1+foreperiod*condition*oneBackFPDiff||ID),
-                    data = goData,
-                    control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-                    progress = TRUE,
-                    expand_re = TRUE,
-                    method =  'S',
-                    REML=TRUE)
-
-#======================= 3.2. Foreperiod, condition and n-1 trial type =====================
-# 3.2.1.1. Fullest model
-oneBacktrialTypelmm1 <- mixed(formula = RT ~ foreperiod * condition * oneBacktrialType + 
-                                (1+foreperiod*condition*oneBacktrialType|ID),
-                              data = goData,
-                              control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-                              progress = TRUE,
-                              expand_re = TRUE,
-                              method =  'S',
-                              REML=TRUE)
-
-oneBacktrialTypelmm2 <- mixed(formula = RT ~ foreperiod * condition * oneBacktrialType + 
-                                (1+foreperiod*condition*oneBacktrialType||ID),
-                              data = goData,
-                              control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-                              progress = TRUE,
-                              expand_re = TRUE,
-                              method =  'S',
-                              REML=TRUE)
-
-# 3.2.2
-# 3.2.2.1. Remove correlations of mixed part
-oneBacktrialTypeSeqlmm2 <- mixed(formula = RT ~ foreperiod * condition * oneBacktrialType * oneBackFP + 
-                                   (1+foreperiod*condition*oneBacktrialType*oneBackFP||ID),
-                                 data = goData,
-                                 control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-                                 progress = TRUE,
-                                 expand_re = TRUE,
-                                 method =  'S',
-                                 REML=TRUE)
-
-# 3.2.2.3. Remove interactions of mixed part
-oneBacktrialTypeSeqlmm3 <- mixed(formula = RT ~ foreperiod * condition * oneBacktrialType * oneBackFP + 
-                                   (1+foreperiod+condition+oneBacktrialType+oneBackFP||ID),
-                                 data = goData,
-                                 control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-                                 progress = TRUE,
-                                 expand_re = TRUE,
-                                 method =  'S',
-                                 REML=TRUE)
-#====================== 3.4. Foreperiod, counterbalance and block ========================
-# 3.4.1. Fullest model
-blockFplmm1 <- mixed(formula = RT ~ foreperiod * counterbalance * block + 
-                  (1+foreperiod*counterbalance*block|ID),
-                data = goData,
-                control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-                progress = TRUE,
-                expand_re = TRUE,
-                method =  'S',
-                REML=TRUE)
-
-# 3.4.2. Remove correlations of mixed part
-blockFplmm2 <- mixed(formula = RT ~ foreperiod * counterbalance * block + 
-                       (1+foreperiod*counterbalance*block||ID),
-                     data = goData,
-                     control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-                     progress = TRUE,
-                     expand_re = TRUE,
-                     method =  'S',
-                     REML=TRUE)
-
-# 3.4.3. Remove interactions of mixed part
-blockFplmm3 <- mixed(formula = RT ~ foreperiod * counterbalance * block + 
-                       (1+foreperiod+counterbalance+block||ID),
-                     data = goData,
-                     control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-                     progress = TRUE,
-                     expand_re = TRUE,
-                     method =  'S',
-                     REML=TRUE)
-summary(blockFplmm3)$varcor
-summary(blockFplmm3)
-anova(blockFplmm3)
 
 
 # 3.4.4. Plot
@@ -641,121 +614,6 @@ ggplot(data = goData,
   facet_wrap(~foreperiod)
 
 # 3.5. Learning 
-#==========================================================================================#
-#============================ 4. Two-stage regression ======================================
-#==========================================================================================#
-
-#=============== 4.1. Foreperiod, condition and sequential effects ====================
-# regSummaryData <- summaryData %>%
-#   mutate(foreperiod = as.numeric(foreperiod),
-#          oneBackFP = as.numeric(oneBackFP))
-
-# Fit global model to extract coefficients
-globallm <- lm(meanRT ~ foreperiod * condition * oneBackFP,
-               data = summaryData)
-
-# Create matrix for coefficients (one column by coefficient, one line by participant)
-idList <- unique(goData$ID)
-coefmatrix <- data.frame(matrix(nrow = length(idList), 
-                                ncol = length(names(globallm$coefficients))))
-colnames(coefmatrix) <- names(globallm$coefficients)
-
-
-# Fit lms and store coefficients in data frame
-for(sub in 1:length(idList)) {
-  subID <- idList[sub]
-  subData <- goData %>%
-    filter(ID == subID)
-  sublm <- lm(RT ~ foreperiod * condition * oneBackFP,
-              data = subData)
-  subcoefs <- sublm$coefficients
-  coefmatrix[sub,] <- subcoefs
-}
-
-# FPn 1.2
-fp12ttest <- t.test(coefmatrix$foreperiod1.2,
-                    alternative = "less",
-                    mu = 0)
-
-# FPn 1.8
-fp18ttest <- t.test(coefmatrix$foreperiod1.8,
-                    alternative = "less",
-                    mu = 0)
-
-# Condition (action)
-actionttest <- t.test(coefmatrix$conditionaction,
-                    alternative = "two.sided",
-                    mu = 0)
-
-# FPn-1 1.2
-oneBackFP12ttest <- t.test(coefmatrix$oneBackFP1.2,
-                          alternative='two.sided',
-                          mu=0)
-
-# FPn-1 1.8
-oneBackFP18ttest <- t.test(coefmatrix$oneBackFP1.8,
-                          alternative='two.sided',
-                          mu=0)
-
-# Two-way interaction FPn 1.2 x condition (action)
-fp12actionttest <- t.test(coefmatrix$"foreperiod1.2:conditionaction",
-                          alternative='two.sided',
-                          mu=0)
-
-# Two-way interaction FPn 1.8 x condition (action)
-fp18actionttest <- t.test(coefmatrix$"foreperiod1.8:conditionaction",
-                          alternative='two.sided',
-                          mu=0)
-
-# Two-way interaction FPn 1.2 x FPn-1 1.2
-fp12oneBackFP12ttest <- t.test(coefmatrix$"foreperiod1.2:oneBackFP1.2",
-                          alternative='two.sided',
-                          mu=0)
-
-# Two-way interaction FPn 1.8 x FPn-1 1.2
-fp18oneBackFP12ttest <- t.test(coefmatrix$"foreperiod1.8:oneBackFP1.2",
-                               alternative='two.sided',
-                               mu=0)
-
-# Two-way interaction FPn 1.2 x FPn-1 1.8
-fp12oneBackFP18ttest <- t.test(coefmatrix$"foreperiod1.2:oneBackFP1.8",
-                               alternative='two.sided',
-                               mu=0)
-
-# Two-way interaction FPn 1.8 x FPn-1 1.8
-fp18oneBackFP18ttest <- t.test(coefmatrix$"foreperiod1.8:oneBackFP1.8",
-                               alternative='two.sided',
-                               mu=0)
-
-# Two-way interaction condition (action) x FPn-1 1.2
-actiononeBackFP12ttest <- t.test(coefmatrix$"conditionaction:oneBackFP1.2",
-                               alternative='two.sided',
-                               mu=0)
-
-# Two-way interaction condition (action) x FPn-1 1.8
-actiononeBackFP18ttest <- t.test(coefmatrix$"conditionaction:oneBackFP1.8",
-                                 alternative='two.sided',
-                                 mu=0)
-
-# Three-way interaction FPn 1.2 x condition (action) x FPn-1 1.2
-fp12actiononeBackFP12ttest <- t.test(coefmatrix$"foreperiod1.2:conditionaction:oneBackFP1.2",
-                                 alternative='two.sided',
-                                 mu=0)
-
-# Three-way interaction FPn 1.8 x condition (action) x FPn-1 1.2
-fp18actiononeBackFP12ttest <- t.test(coefmatrix$"foreperiod1.8:conditionaction:oneBackFP1.2",
-                                     alternative='two.sided',
-                                     mu=0)
-
-# Three-way interaction FPn 1.2 x condition (action) x FPn-1 1.8
-fp12actiononeBackFP18ttest <- t.test(coefmatrix$"foreperiod1.2:conditionaction:oneBackFP1.8",
-                                     alternative='two.sided',
-                                     mu=0)
-
-# Three-way interaction FPn 1.8 x condition (action) x FPn-1 1.8
-fp18actiononeBackFP18ttest <- t.test(coefmatrix$"foreperiod1.8:conditionaction:oneBackFP1.8",
-                                     alternative='two.sided',
-                                     mu=0)
 
 # 4.2. Separate tests by foreperiod
 summaryDatafp06 <- summaryData %>%
