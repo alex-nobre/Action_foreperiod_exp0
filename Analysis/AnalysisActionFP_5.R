@@ -101,6 +101,7 @@ ggplot(data=filter(goData,condition=='external'),
   labs(x = "External fixation duration",
        y = "RT") +
   facet_wrap(~foreperiod)
+
 ggsave("./Analysis/Plots/extfixduration.png",
        width = 13.4,
        height = 10)
@@ -119,6 +120,7 @@ ggplot(data=filter(goData,condition=='action'),
   labs(x = "Action trigger delay",
        y = "RT") +
   facet_wrap(~foreperiod)
+
 ggsave("./Analysis/Plots/actiontrigpress.png",
          width = 13.4,
          height = 10)
