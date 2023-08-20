@@ -144,6 +144,15 @@ goData2 <- goData %>%
   filter(abs(logRTzscore) < 3) %>%
   ungroup()
 
+# Remove trials where trial type n-1 = no-go + RT trimming
+goData3 <- goData %>%
+  filter(oneBacktrialType == "go") %>%
+  group_by(ID) %>%
+  mutate(RTzscore=ifelse(!is.na(RT), compute_zscore(RT), NA),
+         logRTzscore=ifelse(!is.na(RT), compute_zscore(logRT), NA)) %>%
+  filter(abs(logRTzscore) < 3) %>%
+  ungroup()
+
 # No RT trimming
 goData <- goData %>%
   group_by(ID) %>%
@@ -202,7 +211,30 @@ summaryData2 <- goData2 %>%
          scaledNumOneBackFPDiff = scale(numOneBackFPDiff)[,1],
          squaredScaledNumOneBackFPDiff = scaledNumOneBackFPDiff^2)
 
+summaryData3 <- goData3 %>%
+  group_by(ID,foreperiod,logFP,condition,
+           oneBackFP,twoBackFP,oneBackFPDiff,
+           block,counterbalance) %>%
+  summarise(meanRT = mean(RT),
+            meanLogRT = mean(logRT),
+            meanRTzscore = mean(RTzscore),
+            meanInvRT = mean(invRT),
+            meanSeqEff = mean(oneBackEffect)) %>%
+  ungroup() %>%
+  mutate(numForeperiod=as.numeric(as.character(foreperiod)),
+         numOneBackFP = as.numeric(as.character(oneBackFP)),
+         numOneBackFPDiff = as.numeric(as.character(oneBackFPDiff)),
+         numLogFP = as.numeric(as.character(logFP))) %>%
+  mutate(squaredNumForeperiod = numForeperiod^2,
+         squaredNumOneBackFPDiff = numOneBackFPDiff^2,
+         squaredNumLogFP = numLogFP^2,
+         scaledNumForeperiod = scale(numForeperiod)[,1],
+         squaredScaledNumForeperiod = scaledNumForeperiod^2,
+         scaledNumOneBackFP = scale(numOneBackFP)[,1],
+         scaledNumOneBackFPDiff = scale(numOneBackFPDiff)[,1],
+         squaredScaledNumOneBackFPDiff = scaledNumOneBackFPDiff^2)
 
+# Including all trials for accuracy analysis
 summaryDataAll <- dataAll %>%
   group_by(ID,foreperiod,condition,
            oneBackFP, oneBacktrialType, oneBackFPGo) %>%

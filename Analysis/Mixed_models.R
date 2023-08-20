@@ -556,7 +556,7 @@ formula(triminvfplmm7)
 
 triminvfplmm7 <- mixed(formula = invRT ~  1 + foreperiod + oneBackFP + foreperiod:oneBackFP + 
                          condition + foreperiod:condition + oneBackFP:condition + 
-                         foreperiod:oneBackFP:condition + (1 + condition | ID),
+                         foreperiod:oneBackFP:condition + (1 + condition + foreperiod + oneBackFP || ID),
                        data=goData2,
                        control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
                        progress = TRUE,
@@ -574,11 +574,14 @@ emmip(triminvfplmm7, condition ~ oneBackFP|foreperiod, CIs = TRUE)
 triminvfplmm7emm <- emmeans(triminvfplmm7, ~ oneBackFP * condition|foreperiod)
 
 triminvfplmm7emm <- emmeans(triminvfplmm7, pairwise ~ oneBackFP * condition|foreperiod)
-contrast(triminvfplmm7emm[[1]], interaction = c("consec", "consec"), by = "foreperiod", adjust = "none")
+contrast(triminvfplmm7emm[[1]],
+         interaction = c("consec", "consec"),
+         #by = "foreperiod",
+         adjust = "holm")
 
 triminvfplmm3emm <- emmeans(triminvfplmm3, pairwise ~ condition*oneBackFP|foreperiod)
-contrast(triminvfplmm3emm[[1]], interaction = c("consec"), by = c("foreperiod", "oneBackFP"), adjust = "none")
-contrast(triminvfplmm3emm[[1]], interaction = c("consec"), by = c("foreperiod", "condition"), adjust = "none")
+contrast(triminvfplmm3emm[[1]], interaction = c("consec"), by = c("foreperiod", "oneBackFP"), adjust = "holm")
+contrast(triminvfplmm3emm[[1]], interaction = c("consec"), by = c("foreperiod", "condition"), adjust = "holm")
 
 # 3.3.2. Using RT
 # Find optimal structure using buildmer
@@ -974,6 +977,9 @@ isSingular(trimfplmmtrialtype4)
 trimfplmmtrialtype4 <- mixed(RT ~ 1 + foreperiod + oneBackFP + foreperiod:oneBackFP + condition + 
                                oneBacktrialType + foreperiod:condition + condition:oneBacktrialType + 
                                foreperiod:oneBacktrialType + oneBackFP:condition + foreperiod:oneBackFP:condition + 
+                               foreperiod:oneBackFP:oneBacktrialType + condition:oneBackFP:oneBacktrialType + 
+                               foreperiod:condition:oneBacktrialType +
+                               foreperiod:oneBackFP:condition:oneBacktrialType +
                                (1 + condition + oneBacktrialType + condition:oneBacktrialType | 
                                   ID),
                              data=goData2,
@@ -982,10 +988,19 @@ trimfplmmtrialtype4 <- mixed(RT ~ 1 + foreperiod + oneBackFP + foreperiod:oneBac
                              expand_re = TRUE,
                              method =  'KR',
                              REML=TRUE,
-                             return = "merMod",
-                             check_contrasts = FALSE)
+                             return = "merMod")#,
+                             #check_contrasts = FALSE)
 
-
+trimfplmmtrialtype4 <- mixed(RT ~ foreperiod * condition * oneBackFP * oneBacktrialType +
+                               (1 + condition + oneBacktrialType + condition:oneBacktrialType | 
+                                  ID),
+                             data=goData2,
+                             control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                             progress = TRUE,
+                             expand_re = TRUE,
+                             method =  'KR',
+                             REML=TRUE,
+                             return = "merMod")
 
 summary(trimfplmmtrialtype4)
 

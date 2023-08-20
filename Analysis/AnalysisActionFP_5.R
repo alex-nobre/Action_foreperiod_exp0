@@ -154,7 +154,7 @@ contrasts(summaryData2$oneBackFP) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2
 contrasts(summaryData2$oneBackFPGo) <- contr.treatment(4)-matrix(rep(1/4,12),ncol=3)
 
 #==================== 2.1. FP x RT by condition ======================
-lines_by_condition <- ggplot(data = summaryData2,
+lines_by_condition <- ggplot(data = summaryData3,
        aes(x = foreperiod,
            y = meanRT,
            color = condition)) +
@@ -163,24 +163,26 @@ lines_by_condition <- ggplot(data = summaryData2,
   stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.2, geom = "errorbar") + 
   labs(title = "RT by condition",
        x = "Foreperiod",
-       y = "Mean RT") +
+       y = "Mean RT",
+       color = "Condition") +
   theme(plot.title = element_text(size = 14, hjust = 0.5),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(),
         axis.text = element_text(size = rel(1.2)),
         axis.title = element_text(size = rel(1.2))) +
-  scale_color_manual(values = c("orange", "blue"))
-
-
+  scale_color_manual(values = c("orange", "blue"), labels = c("External", "Action"))
 ggplot2::ggsave("./Analysis/Plots/RT_by_condition.png",
-                lines_by_condition)
+                lines_by_condition,
+                width = 6.7,
+                height = 5)
 
 # Anova with RT
 fpAnova <- aov_ez(id = "ID",
        dv = "meanRT",
        data = summaryData2,
-       within = c("foreperiod", "condition"))
+       within = c("foreperiod", "condition"),
+       anova_table = list(es = "pes"))
 
 
 check_sphericity(fpAnova)
@@ -191,8 +193,7 @@ plot(is_norm)
 
 plot(is_norm, type = "qq")
 
-nice(fpAnova,
-     correction='none')
+nice(fpAnova)
 summary(fpAnova)
 
 
@@ -285,7 +286,7 @@ ggplot(data = summaryData2,
         axis.title = element_text(size = rel(1.2))) +
   facet_wrap(~condition) +
   scale_color_manual(values = c('blue', 'orange', 'green'))
-ggsave("./Analysis/Plots/SeqEff.png",
+ggsave("./Analysis/Plots/SeqEff.pdf",
        width = 6.7,
        height = 5)
 
@@ -317,32 +318,46 @@ ggsave("./Analysis/Plots/onebackxCondition.png",
 seqEffAnova <- aov_ez(id = "ID",
                   dv = "meanRT",
                   data = summaryData2,
-                  within = c("foreperiod", "condition", "oneBackFP"))
+                  within = c("foreperiod", "condition", "oneBackFP"),
+                  anova_table = list(es = "pes"))
 
+# Without no-go trials
 seqEffAnova <- aov_ez(id = "ID",
-                      dv = "meanInvRT",
-                      data = summaryData2,
-                      within = c("foreperiod", "condition", "oneBackFP"))
+                      dv = "meanRT",
+                      data = summaryData3,
+                      within = c("foreperiod", "condition", "oneBackFP"),
+                      anova_table = list(es = "pes"))
+
+check_sphericity(seqEffAnova)
+
+is_norm <- check_normality(seqEffAnova)
+
+nice(seqEffAnova)
+
+# Pairwise comparisons for conditions wihtin levels of foreperiod
+conditionEmmeans <- emmeans(seqEffAnova,
+                     pairwise ~ condition|foreperiod,
+                     adjust = "holm")
+
+# fpEmmeansContrasts <- contrast(fpEmmeans[[1]],
+#                                interaction=c('poly'),
+#                                adjust='bonferroni')
 
 
-
-nice(seqEffAnova,
-     correction='none')
+conditionEmmeansContrasts <- contrast(conditionEmmeans[[1]],
+                               interaction = c("consec"),
+                               adjust = "holm")
                   
-seqEFffregression <- lm(meanRT ~ foreperiod * oneBackFP * condition, 
-                   data = summaryData)
-summary(seqEFffregression)
-anova(seqEFffregression)
 
-logseqEffregression <- lm(meanRT~logFP*logoneBackFP*condition,
-                          data=summaryData) 
-anova(logseqEffregression)
+# Pairwise comparisons for levels of oneBackFP within foreperiod
+oneBackEmmeans <- emmeans(seqEffAnova,
+                          pairwise ~ oneBackFP|foreperiod,
+                          adjust = "holm")
 
-# 2.2.2. Lm with difference between the durations of FPn and FPn-1 as regressor
-fpDiffRegression <- lm(meanRT ~ foreperiod * condition * oneBackFPDiff,
-                       data = summaryData)
-summary(fpDiffRegression)
-anova(fpDiffRegression)
+oneBackfpEmmeansConstrasts <- contrast(oneBackEmmeans[[1]],
+                                        interaction = c("consec"),
+                                        adjust = "holm")
+
 
 # Sequential effects of FP n-2
 ggplot(data = summaryData2,
@@ -452,7 +467,7 @@ ggplot(data = summaryData2,
            color=condition)) +
   stat_summary(fun = "mean", geom = "point", size = 1.5) +
   stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = condition)) +
-  stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.1, geom = "errorbar") +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.1, geom = "errorbar") +
   labs(x = "FP n-1 trial type",
        y = "Mean RT",
        color = "Condition") +
@@ -474,7 +489,7 @@ ggplot(data = summaryData2,
            color=oneBackFP)) +
   stat_summary(fun = "mean", geom = "point", size = 1.5) +
   stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = oneBackFP)) +
-  stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.1, geom = "errorbar") +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.1, geom = "errorbar") +
   labs(x = "Foreperiod",
        y = "Mean RT",
        color = "FP n-1") +
@@ -489,9 +504,9 @@ ggplot(data = summaryData2,
         legend.title = element_text(size = rel(1.8))) +
   facet_grid(oneBacktrialType ~ condition) +
   scale_color_manual(values = c("blue", "orange", "green"))
-ggsave("./Analysis/Plots/RT_condition_trialtype.png",
-       width = 13.4,
-       height = 10)
+ggsave("./Analysis/Plots/RT_condition_trialtype.pdf",
+       width = 6.7,
+       height = 5)
 
 ggplot(data = summaryData2,
        aes(x = foreperiod,
@@ -516,12 +531,19 @@ ggplot(data = summaryData2,
 # 2.3.1. Anova with foreperiod, condition and n-1 trial type
 trialTypeAnova <- aov_ez(id = "ID",
                       dv = "meanRT",
-                      data = summaryData,
-                      within = c("foreperiod", "condition", "oneBacktrialType"))
+                      data = summaryData2,
+                      within = c("foreperiod", "condition", "oneBacktrialType"),
+                      anova_table = list(es = "pes"))
 
-nice(trialTypeAnova,
-     correction='none')
+nice(trialTypeAnova)
 
+ttypEmmeans <- emmeans(trialTypeAnova,
+                       pairwise ~ oneBacktrialType|condition*foreperiod,
+                       adjust = "holm")
+
+ttypEmmeansContrast <- contrast(ttypEmmeans[[1]],
+                                interaction = c("pairwise"),
+                                adjust = "holm")
 
 # 2.3.2. Anova with foreperiod, n-1 trial type and sequential effects
 seqEfftrialTypeAnova <- aov_ez(id = "ID",
@@ -583,13 +605,18 @@ ggsave("./Analysis/Plots/seqEffNoGO.png")
 seqEffGoAnova <- aov_ez(id = "ID",
                         dv = "meanRT",
                         data = summaryData2,
-                        within = c("foreperiod", "oneBackFPGo", "condition"))
+                        within = c("foreperiod", "oneBackFPGo", "condition"),
+                        anova_table = list(es = "pes"))
 
-nice(seqEffGoAnova,
-     correction='none')
+nice(seqEffGoAnova)
 
-seqEffGoemm <- emmeans(seqEffGoAnova, pairwise ~ oneBackFPGo * condition| foreperiod)
-contrast(seqEffGoemm[[1]], interaction = c("consec", "pairwise"), by = "foreperiod")
+seqEffGoemm <- emmeans(seqEffGoAnova, 
+                       pairwise ~ oneBackFPGo| condition * foreperiod,
+                       adjust = "holm")
+
+contrast(seqEffGoemm[[1]],
+         interaction = c("pairwise"),
+         adjust = "holm")
 
 
 #==================== 2.4. Foreperiod, condition and block ======================
