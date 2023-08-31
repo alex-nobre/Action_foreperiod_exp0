@@ -1,0 +1,186 @@
+---
+title: "Comparison between linear mixed model building heuristics"
+output: pdf_document
+bibliography: bibliography.bib
+csl: apa.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Intro
+
+Este script compara os resultados da heurística automatizada de construção de modelos mistos do pacote buildmer com outras heurísticas para os dados do experimento 1 do projeto action_foreperiod:
+
+* buildmer vs o modelo completo;
+* buildmer vs a heurística "Keep it maximal" [@barr_random_2013];
+* buildmer vs a heurística sugerida por Kleinman [neste tweet](https://twitter.com/dankleinman/status/1460386112342573059)
+
+Para esta última, utilizamos as funções fornecidas pelo próprio Kleinman num script disponível [aqui](https://osf.io/m46zw)
+
+```{r prepare functions and data, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(magrittr)
+library(lattice)
+library(afex)
+library(emmeans)
+library(lme4)
+library(car)
+library(data.table)
+library(buildmer)
+library(tidyr)
+library(janitor)
+library(broom.mixed)
+
+# Save defaults
+graphical_defaults <- par()
+options_defaults <- options() 
+
+# Read data
+source("Prepare_data_markdown.R")
+
+source("mixed_model_fitting_code.R")
+```
+
+# 1. Buildmer vs modelo completo
+
+Primeiro, comparamos o modelo obtido pelo buildmer com o modelo completo. Inicialmente, usamos o buildmer para obter automaticamente a especificação do modelo.
+
+```{r Ajustar buildmer, message=FALSE, warning=FALSE}
+buildmerMod <- buildmer(RT ~ numForeperiod * condition * oneBackFP + 
+                            (1+numForeperiod*condition*oneBackFP|ID), 
+                          data=goData2,
+                          buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
+
+formula(buildmerMod)
+```
+
+Agora, ajustamos o modelo usando a função "mixed", do afex, que é mais conveniente para análise (output não mostrado aqui).
+
+```{r Ajustar modelo obtido pelo buildmer, message=FALSE, warning=FALSE}
+buildmerMod <- mixed(formula = RT ~  1 + numForeperiod + oneBackFP + numForeperiod:oneBackFP + 
+                         condition + numForeperiod:condition + oneBackFP:condition + 
+                         numForeperiod:oneBackFP:condition + (1 + condition | ID),
+                       data=goData2,
+                       control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                       progress = TRUE,
+                       expand_re = TRUE,
+                       method =  'KR',
+                       REML=TRUE,
+                       return = "merMod")
+```
+
+Então, ajustamos o modelo completo para comparação.
+
+```{r Ajustar modelo completo}
+fullMod <- mixed(formula = RT ~  numForeperiod * oneBackFP * condition +
+                   (1 + numForeperiod * oneBackFP * condition | ID),
+                 data=goData2,
+                 control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                 progress = TRUE,
+                 expand_re = TRUE,
+                 method =  'KR',
+                 REML=TRUE,
+                 return = "merMod")
+
+```
+
+O output mostra que o modelo falhou em convergir, sugerindo que não podemos confiar nos resultados. Finalmente, podemos comparar as anovas dos dois modelos.
+
+```{r Comparar modelos, echo=TRUE}
+anova(buildmerMod)
+anova(fullMod)
+```
+
+Podemos ver que os resultados são radicalmente diferentes. Em especial, no modelo completo, além das significâncias implausíveis, temos valores impossíveis de somas de quadrados para foreperiod e suas interações. O buildmer claramente oferece resultados melhores.
+
+
+# 2. Buildmer vs "keep it maximal"
+
+Aqui, comparamos o modelo resultante do buildmer com o modelo obtido pela estratégia "keep it maximal", que consiste em seguir a seguinte sequência de estratégias até se obter um modelo que convirja ( e.g., que não obtenha um ajuste singular [@brown_introduction_2021]:
+
+1. Ajustar o modelo completo, incluindo todos os efeitos fixos, efeitos aleatórios (intercepto e slopes), correlações entre efeitos aleatórios e interações entre efeitos aleatórios.
+2. Remover as correlações entre efeitos aleatórios;
+3. Remover as interações entre efeitos aleatórios;
+4. Remover os efeitos que respondem pela menor parte da variância.
+
+Como já vimos que o modelo completo não converge, podemos iniciar pelo segundo passo.
+
+```{r Keep it maximal - remove correlations, warning=FALSE}
+# Remove correlations
+kimMod <- mixed(formula = RT ~  numForeperiod * oneBackFP * condition +
+                  (1 + numForeperiod * oneBackFP * condition || ID),
+                data=goData2,
+                control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                progress = TRUE,
+                expand_re = TRUE,
+                method =  'KR',
+                REML=TRUE,
+                return = "merMod")
+```
+
+Novamente, o modelo não converge. No próximo passo, removemos as interações. Como o modelo converge, já examinamos a anova.
+
+```{r Keep it maximal - remove interactions, warning=FALSE}
+# Remove interactions
+kimMod <- mixed(formula = RT ~  numForeperiod * oneBackFP * condition +
+                  (1 + numForeperiod + oneBackFP + condition || ID),
+                data=goData2,
+                control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                progress = TRUE,
+                expand_re = TRUE,
+                method =  'KR',
+                REML=TRUE,
+                return = "merMod")
+
+anova(kimMod)
+```
+
+Agora, visualizamos novamente a anova do modelo obtido do buildmer para comparação.
+
+```{r anova buildmer}
+anova(buildmerMod)
+```
+
+Os resultados são qualitativamente equivalentes entre os dois. A diferença mais perceptível é no efeito de foreperiod, que é bem maior (em termos de razão de F) no modelo obtido com o buildmer. Não existe diferença importante na significância, no entanto. 
+
+# 3. Buildmer vs "Kleinman" heuristics
+
+Aqui seguimos a recomendação de, após a remoção das correlações, já partir direto para a remoção dos fatores aleatórios que explique menos que um limiar (aqui o recomendado de 1%) da variância. Utilizamos a função fornecida no código do autor para identificar esses fatores.
+
+```{r slopes a remover para kleinman heuristics, message=FALSE, warning=FALSE}
+klMod <- mixed(formula = RT ~  numForeperiod * oneBackFP * condition +
+                 (1 + numForeperiod * oneBackFP * condition || ID),
+               data=goData2,
+               control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+               progress = TRUE,
+               expand_re = TRUE,
+               method =  'KR',
+               REML=TRUE,
+               return = "merMod")
+
+rmvdSlopes <- pare.random.slopes(klMod)
+print(rmvdSlopes)
+```
+
+Podemos ver que o modelo resultante - com todos os efeitos e interações da parte fixa e mantendo apenas condição como fator aleatório - é exatamente aquele obtido pelo buildmer. Vamos ajustar o modelo para conferir.
+
+
+```{r ajustar modelo segundo kleinman heuristics, warning=FALSE}
+klMod <- mixed(formula = RT ~  numForeperiod * oneBackFP * condition +
+                 (1 + condition || ID),
+               data=goData2,
+               control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+               progress = TRUE,
+               expand_re = TRUE,
+               method =  'KR',
+               REML=TRUE,
+               return = "merMod")
+
+anova(klMod)
+```
+
+O resultado é o mesmo, confirmando que o modelo obtido é o mesmo.
+
+# References

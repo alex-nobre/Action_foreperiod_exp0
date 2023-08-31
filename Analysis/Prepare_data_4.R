@@ -1,13 +1,5 @@
 
 
-
-#==============================================================================#
-# Changes
-# Includes external fixation duration and action trigger RT in dataset
-
-# Use RT in ms instead of s, so that logRT does not assume negative values
-#==============================================================================#
-
 # Load necessary packages
 library(readr)
 library(ggplot2)
@@ -53,25 +45,47 @@ data$twoBacktrialType <- as.factor(data$twoBacktrialType)
 data <- data %>%
   filter(condition != 'practice')
 
+# Create numeric versions of foreperiod and FP n-1 (for computation of other variables)
+data$numForeperiod <- as.numeric(as.character(data$foreperiod))
+data$numOneBackFP <- as.numeric(as.character(data$oneBackFP))
+
+# Create columns for numerical and categorical difference between current and previous FP, and for 
+# whether the previous FP is longer than the current:
+# If FPn-1 is shorter than the current FP, value is 0
+# If FPn-1 is equal to the current FP, value is 0
+# If FPn-1 is longer than the current FP, value is 1
+data <- data %>%
+  group_by(ID, block) %>%
+  mutate(numOneBackFPDiff = c(NA, diff(numForeperiod))) %>%
+  mutate(oneBackFPDiff = as.factor(numOneBackFPDiff), # to summarise RTs according to value of FP n-1
+         squaredNumOneBackFPDiff = numOneBackFPDiff^2) %>% # quadratic term for difference between FP and FP n-1
+  mutate(prevFPLonger = case_when(oneBacktrialType=="no-go" ~ "no-go",
+                                  numOneBackFPDiff>0 ~ "0",
+                                  numOneBackFPDiff<0 ~ "1",
+                                  numOneBackFPDiff==0 ~ "0")
+  ) %>%
+  mutate(prevFPLonger = as.factor(prevFPLonger)) %>%
+  mutate(prevFPLonger = fct_relevel(prevFPLonger, c("0", "1"))) %>%
+  ungroup()
 
 # Create column for difference between current and previous FP:
 # If FPn-1 is shorter than the current FP, value is 1
 # If FPn-1 is equal to the current FP, value is 1
 # If FPn-1 is longer than the current FP, value is -1
 # If the previous trial was a no-go trial, use this as separate category
-oneBackFPDiff <- diff(as.numeric(as.character(data$foreperiod)))
-oneBackFPDiff <- c(NA, oneBackFPDiff)
-data$numOneBackFPDiff <- oneBackFPDiff
-
-
-data <- data %>%
-  mutate(oneBackFPDiff = case_when(oneBacktrialType=="no-go" ~ "no-go",
-                                   numOneBackFPDiff>0 ~ "1",
-                                   numOneBackFPDiff<0 ~ "-1",
-                                   numOneBackFPDiff==0 ~ "0")
-         ) %>%
-  mutate(oneBackFPDiff = as.factor(oneBackFPDiff)) %>%
-  mutate(oneBackFPDiff=forcats::fct_relevel(oneBackFPDiff, c("no-go", "-1", "0", "1")))
+# oneBackFPDiff <- diff(as.numeric(as.character(data$foreperiod)))
+# oneBackFPDiff <- c(NA, oneBackFPDiff)
+# data$numOneBackFPDiff <- oneBackFPDiff
+# 
+# 
+# data <- data %>%
+#   mutate(oneBackFPDiff = case_when(oneBacktrialType=="no-go" ~ "no-go",
+#                                    numOneBackFPDiff>0 ~ "1",
+#                                    numOneBackFPDiff<0 ~ "-1",
+#                                    numOneBackFPDiff==0 ~ "0")
+#          ) %>%
+#   mutate(oneBackFPDiff = as.factor(oneBackFPDiff)) %>%
+#   mutate(oneBackFPDiff=forcats::fct_relevel(oneBackFPDiff, c("no-go", "-1", "0", "1")))
 
 # Column for FP n-1 including no-go
 data <- data %>%
@@ -111,16 +125,16 @@ dataAll$logOneBackFP <- log10(dataAll$numOneBackFP)
 
 # Create quadratic values of continuous predictors
 goData$squaredNumForeperiod <-  (goData$numForeperiod)^2
-goData$numOneBackFP <- (goData$numOneBackFP)^2
-goData$scaledNumForeperiod <-  scale(goData$numForeperiod)[,1]
+goData$squaredNumOneBackFP <- (goData$numOneBackFP)^2
+goData$scaledNumForeperiod <-  scale(goData$numForeperiod, scale = FALSE)[,1]
 goData$squaredScaledNumForeperiod <- (goData$scaledNumForeperiod)^2
-goData$scaledNumOneBackFP <- scale(goData$numOneBackFP)[,1]
+goData$scaledNumOneBackFP <- scale(goData$numOneBackFP, scale = FALSE)[,1]
 
 dataAll$squaredNumForeperiod <-  (dataAll$numForeperiod)^2
-dataAll$numOneBackFP <- (dataAll$numOneBackFP)^2
-dataAll$scaledNumForeperiod <-  scale(dataAll$numForeperiod)[,1]
+dataAll$squaredNumOneBackFP <- (dataAll$numOneBackFP)^2
+dataAll$scaledNumForeperiod <-  scale(dataAll$numForeperiod, scale = FALSE)[,1]
 dataAll$squaredScaledNumForeperiod <- (dataAll$scaledNumForeperiod)^2
-dataAll$scaledNumOneBackFP <- scale(dataAll$numOneBackFP)[,1]
+dataAll$scaledNumOneBackFP <- scale(dataAll$numOneBackFP, scale = FALSE)[,1]
 
 # Factor version of accuracy
 goData$acc_result <- as.factor(goData$Acc)
@@ -144,6 +158,13 @@ goData2 <- goData %>%
   filter(abs(logRTzscore) < 3) %>%
   ungroup()
 
+# Recompute scaled variables (which were de-centered by trimming)
+goData2$squaredNumForeperiod <-  (goData2$numForeperiod)^2
+goData2$squaredNumOneBackFP <- (goData2$numOneBackFP)^2
+goData2$scaledNumForeperiod <-  scale(goData2$numForeperiod, scale = FALSE)[,1]
+goData2$squaredScaledNumForeperiod <- (goData2$scaledNumForeperiod)^2
+goData2$scaledNumOneBackFP <- scale(goData2$numOneBackFP, scale = FALSE)[,1]
+
 # Remove trials where trial type n-1 = no-go + RT trimming
 goData3 <- goData %>%
   filter(oneBacktrialType == "go") %>%
@@ -152,6 +173,17 @@ goData3 <- goData %>%
          logRTzscore=ifelse(!is.na(RT), compute_zscore(logRT), NA)) %>%
   filter(abs(logRTzscore) < 3) %>%
   ungroup()
+
+# Relevel oneBackFPDiff and prevFPLonger without no-go trials
+goData3$oneBackFPDiff <- fct_drop(goData3$oneBackFPDiff)
+goData3$prevFPLonger <- fct_drop(goData3$prevFPLonger)
+
+# Compute scaled variables without no-go trials
+goData3$squaredNumForeperiod <-  (goData3$numForeperiod)^2
+goData3$squaredNumOneBackFP <- (goData3$numOneBackFP)^2
+goData3$scaledNumForeperiod <-  scale(goData3$numForeperiod, scale = FALSE)[,1]
+goData3$squaredScaledNumForeperiod <- (goData3$scaledNumForeperiod)^2
+goData3$scaledNumOneBackFP <- scale(goData3$numOneBackFP, scale = FALSE)[,1]
 
 # No RT trimming
 goData <- goData %>%

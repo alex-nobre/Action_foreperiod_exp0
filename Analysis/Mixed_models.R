@@ -17,7 +17,10 @@ library(broom.mixed)
 
 # Save defaults
 graphical_defaults <- par()
-options_defaults <- options() 
+options_defaults <- options()
+
+# emm options
+emm_options(lmer.df = "satterthwaite", lmerTest.limit = 12000)
 
 # Read data
 source('./Analysis/Prepare_data_4.R')
@@ -84,6 +87,15 @@ ggplot(data = dataGroupedByRT,
   scale_x_continuous(breaks = 0:4 * 2) +
   theme(strip.text = element_text(size = 12),
         axis.text.y = element_text(size = 12))
+
+# Fit individual models automatically
+indModelsRT <- lmList(RT ~ numForeperiod | ID, data = goData2)
+
+plot.new()
+for(sub in indModelsRT) {
+  subCoefs <- sub$coefficients
+  abline(a = subCoefs[1], b = subCoefs[2])  
+}
 
 
 #==========================================================================================#
@@ -416,7 +428,7 @@ isSingular(triminvfplmm1)
 
 
 #==========================================================================================#
-#==================================== 3. Model asssessment =================================
+#==================================== 3. Model assessment =================================
 #==========================================================================================#
 
 #=============================== 3.1. FP and FP n-1 as numerical ==================================
@@ -511,6 +523,7 @@ BIC(triminvfplmm1, triminvfplmm2, triminvfplmm3, triminvfplmm4, triminvfplmm5) %
 
 #====================== 3.2. Using FP n-1 as categorical for emm comparisons ==========================
 
+# 3.2.1. Using invRT
 triminvfplmm6 <- buildmer(invRT ~ numForeperiod * condition * oneBackFP + 
                            (1+numForeperiod*condition*oneBackFP|ID), 
                          data=goData2,
@@ -533,12 +546,112 @@ triminvfplmm6 <- mixed(formula = invRT ~  1 + numForeperiod + oneBackFP + numFor
                        check_contrasts = FALSE)
 
 # emm
-emm_options(lmer.df = "satterthwaite", lmerTest.limit = 12000)
-Fp_by_Previous=emtrends(triminvfplmm5, "oneBackFP", var = "numForeperiod")
+Fp_by_Previous=emtrends(triminvfplmm6, "oneBackFP", var = "numForeperiod")
 Fp_by_Previous
 update(pairs(Fp_by_Previous), by = NULL, adjust = "holm")
 
-Fp_by_Previous=emtrends(triminvfplmm5, c("condition", "oneBackFP"), var = "numForeperiod")
+Fp_by_Previous=emtrends(triminvfplmm6, c("condition", "oneBackFP"), var = "numForeperiod")
+Fp_by_Previous
+update(pairs(Fp_by_Previous), by = NULL, adjust = "none")
+
+# 3.2.1. Using RT
+trimfplmm6 <- buildmer(RT ~ numForeperiod * condition * oneBackFP + 
+                            (1+numForeperiod*condition*oneBackFP|ID), 
+                          data=goData2,
+                          buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
+
+isSingular(trimfplmm6)
+formula(trimfplmm6)
+
+
+trimfplmm6 <- mixed(formula = RT ~  1 + numForeperiod + oneBackFP + numForeperiod:oneBackFP + 
+                         condition + numForeperiod:condition + oneBackFP:condition + 
+                         numForeperiod:oneBackFP:condition + (1 + condition | ID),
+                       data=goData2,
+                       control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                       progress = TRUE,
+                       expand_re = TRUE,
+                       method =  'KR',
+                       REML=TRUE,
+                       return = "merMod")
+
+anova(trimfplmm6)
+
+#Visualize random effects
+dotplot(ranef(trimfplmm6, condVar = TRUE))
+
+# emm
+Fp_by_Previous=emtrends(trimfplmm6, "oneBackFP", var = "numForeperiod")
+Fp_by_Previous
+update(pairs(Fp_by_Previous), by = NULL, adjust = "holm")
+
+Fp_by_Previous=emtrends(trimfplmm6, c("condition", "oneBackFP"), var = "numForeperiod")
+Fp_by_Previous
+update(pairs(Fp_by_Previous), by = NULL, adjust = "none")
+
+# Same but without n-1 no-go trials
+trimfplmm6 <- buildmer(RT ~ numForeperiod * condition * oneBackFP + 
+                         (1+numForeperiod*condition*oneBackFP|ID), 
+                       data=goData3,
+                       buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
+
+isSingular(trimfplmm6)
+formula(trimfplmm6)
+
+
+trimfplmm6 <- mixed(formula = RT ~ 1 + numForeperiod + oneBackFP + numForeperiod:oneBackFP + 
+                      condition + numForeperiod:condition + oneBackFP:condition + 
+                      numForeperiod:oneBackFP:condition + (1 + condition | ID),
+                    data=goData3,
+                    control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                    progress = TRUE,
+                    expand_re = TRUE,
+                    method =  'KR',
+                    REML=TRUE,
+                    return = "merMod")
+
+summary(trimfplmm6)
+anova(trimfplmm6)
+
+# emm
+Fp_by_Previous=emtrends(trimfplmm6, "oneBackFP", var = "numForeperiod")
+Fp_by_Previous
+update(pairs(Fp_by_Previous), by = NULL, adjust = "holm")
+
+Fp_by_Previous=emtrends(trimfplmm6, c("condition", "oneBackFP"), var = "numForeperiod")
+Fp_by_Previous
+update(pairs(Fp_by_Previous), by = NULL, adjust = "none")
+
+
+# Now without n-1 go trials
+trimfplmm6 <- buildmer(RT ~ numForeperiod * condition * oneBackFP + 
+                         (1+numForeperiod*condition*oneBackFP|ID), 
+                       data=filter(goData2, oneBacktrialType == "no-go"),
+                       buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
+
+isSingular(trimfplmm6)
+formula(trimfplmm6)
+
+trimfplmm6 <- mixed(formula = RT ~ 1 + numForeperiod + oneBackFP + numForeperiod:oneBackFP + 
+                      condition + numForeperiod:condition + oneBackFP:condition + 
+                      numForeperiod:oneBackFP:condition + (1 + condition | ID),
+                    data=filter(goData2, oneBacktrialType == "no-go"),
+                    control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                    progress = TRUE,
+                    expand_re = TRUE,
+                    method =  'KR',
+                    REML=TRUE,
+                    return = "merMod")
+
+summary(trimfplmm6)
+anova(trimfplmm6)
+
+# emm
+Fp_by_Previous=emtrends(trimfplmm6, "oneBackFP", var = "numForeperiod")
+Fp_by_Previous
+update(pairs(Fp_by_Previous), by = NULL, adjust = "holm")
+
+Fp_by_Previous=emtrends(trimfplmm6, c("condition", "oneBackFP"), var = "numForeperiod")
 Fp_by_Previous
 update(pairs(Fp_by_Previous), by = NULL, adjust = "none")
 
@@ -627,9 +740,8 @@ contrast(trimfplmm7emm[[1]], interaction = c("consec", "consec"), by = "foreperi
 contrast(trimfplmm7emm[[1]], interaction = c("consec"), by = c("foreperiod", "oneBackFP"), adjust = "holm")
 contrast(trimfplmm7emm[[1]], interaction = c("consec"), by = c("foreperiod", "condition"), adjust = "holm")
 
-#===================================================================================#
-# Sanity check: model comparisons without trimming
-#===================================================================================#
+
+#=============== Sanity check: model comparisons without trimming =================
 invfplmm2 <- mixed(formula = invRT ~ numForeperiod*condition*numOneBackFP + 
                          (1+numForeperiod+condition||ID),
                        data = goData,
@@ -672,7 +784,7 @@ cor(fitted(invfplmm2), goData$invRT)^2
 cor(fitted(invfplmm3), goData$invRT)^2
 cor(fitted(invfplmm4), goData$invRT)^2
 
-#=================== 3.3. Use RT and logRT to get priors for next experiment =====================
+#=================== 3.3. Use logRT to get priors for next experiment =====================
 
 # logRT and FP and FP n-1 as numerical
 trimlogfplmm1 <- buildmer(formula = logRT ~ numForeperiod*condition*numOneBackFP + 
@@ -729,66 +841,15 @@ isSingular(trimlogfplmm2)
 
 summary(trimlogfplmm2)
 
-# RT as linear and and FP and FP n-1 as numerical
-trimfplmm1 <- buildmer(formula = RT ~ numForeperiod*condition*numOneBackFP + 
-                         (1+numForeperiod*condition*numOneBackFP|ID),
-                       data = goData2,
-                       buildmerControl = list(#direction='backward',
-                         crit='LRT',#ddf = "Satterthwaite",
-                         family=gaussian(link = 'identity'),
-                         calc.anova = TRUE))
 
-formula(trimfplmm1)
-
-isSingular(trimfplmm1)
-
-trimfplmm1 <- mixed(RT ~ 1 + numForeperiod + numOneBackFP + numForeperiod:numOneBackFP + 
-                      condition + numForeperiod:condition + numOneBackFP:condition + 
-                      numForeperiod:numOneBackFP:condition + (1 + condition | ID),
-                    data=goData2,
-                    control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-                    progress = TRUE,
-                    expand_re = TRUE,
-                    method =  'KR',
-                    REML=TRUE,
-                    return = "merMod",
-                    check_contrasts = FALSE)
-
-options(scipen = 999)
-summary(trimfplmm1)
-
-
-# RT as linear and FP and FP n-1 as categorical
-trimfplmm2 <- buildmer(RT ~ foreperiod * oneBackFP * condition + 
-                            (1+foreperiod * oneBackFP * condition|ID), 
-                          data=goData2,
-                          buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
-
-isSingular(trimfplmm2)
-formula(trimfplmm2)
-
-
-trimfplmm2 <- mixed(RT ~ 1 + foreperiod + oneBackFP + foreperiod:oneBackFP + condition + 
-                      foreperiod:condition + oneBackFP:condition + foreperiod:oneBackFP:condition + 
-                      (1 + condition | ID),
-                       data=goData2,
-                       control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-                       progress = TRUE,
-                       expand_re = TRUE,
-                       method =  'KR',
-                       REML=TRUE,
-                       return = "merMod",
-                       check_contrasts = FALSE)
-
-summary(trimfplmm2)
-
-anova(trimfplmm2)
 
 #============================================================================================================#
 #===================================== 4. Sequential effects with n-1 trial type =============================
 #============================================================================================================#
 
-#======= Continuous variables ========
+#============================ 4.1. FP n-1 and trial type in combined variable ============================
+
+#======= 4.1.1. Continuous variables ========
 
 # RT
 trimfplmmtrialtype1 <- buildmer(RT ~ numForeperiod * condition * oneBackFPGo + 
@@ -843,7 +904,7 @@ summary(triminvfplmmtrialtype1)
 
 anova(triminvfplmmtrialtype1)
 
-#=========== Categorical variables ============
+#=========== 4.1.2. Categorical variables ============
 
 # RT
 trimfplmmtrialtype2 <- buildmer(RT ~ foreperiod * condition * oneBackFPGo + 
@@ -899,13 +960,13 @@ summary(triminvfplmmtrialtype2)
 anova(triminvfplmmtrialtype2)
 
 
-# FP n-1 and trial type as separate variables
+#================================ 4.2. FP n-1 and trial type as separate variables =======================
 
-#=========== Continuous variables ============
+#=========== 4.2.1. Continuous variables ============
 
 # RT
 trimfplmmtrialtype3 <- buildmer(RT ~ numForeperiod * condition * numOneBackFP * oneBacktrialType + 
-                                  (1 + numForeperiod * condition * numOneBackFPGo * oneBacktrialType |ID), 
+                                  (1 + numForeperiod * condition * numOneBackFP * oneBacktrialType |ID), 
                                 data=goData2,
                                 buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
 
@@ -934,7 +995,7 @@ anova(trimfplmmtrialtype3)
 
 # 1/RT
 triminvfplmmtrialtype3 <- buildmer(invRT ~ numForeperiod * condition * numOneBackFP * oneBacktrialType + 
-                                     (1 + numForeperiod * condition * numOneBackFPGo * oneBacktrialType |ID), 
+                                     (1 + numForeperiod * condition * numOneBackFP * oneBacktrialType |ID), 
                                    data=goData2,
                                    buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
 
@@ -962,11 +1023,11 @@ summary(triminvfplmmtrialtype3)
 
 anova(triminvfplmmtrialtype3)
 
-#=========== Categorical variables ============
+#=========== 4.2.2. FP n-1 as categorical and FP n as continuous ============
 
-# RT
-trimfplmmtrialtype4 <- buildmer(RT ~ foreperiod * condition * oneBackFP * oneBacktrialType + 
-                                  (1+foreperiod * condition * oneBackFP * oneBacktrialType|ID), 
+# 4.2.2.1. RT
+trimfplmmtrialtype4 <- buildmer(RT ~ numForeperiod * condition * oneBackFP * oneBacktrialType + 
+                                  (1 + numForeperiod * condition * oneBackFP * oneBacktrialType |ID), 
                                 data=goData2,
                                 buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
 
@@ -974,7 +1035,77 @@ formula(trimfplmmtrialtype4)
 
 isSingular(trimfplmmtrialtype4)
 
-trimfplmmtrialtype4 <- mixed(RT ~ 1 + foreperiod + oneBackFP + foreperiod:oneBackFP + condition + 
+trimfplmmtrialtype4 <- mixed(RT ~  1 + numForeperiod + oneBackFP + numForeperiod:oneBackFP + 
+                               condition + oneBacktrialType + numForeperiod:condition + 
+                               condition:oneBacktrialType + numForeperiod:oneBacktrialType + 
+                               oneBackFP:oneBacktrialType + oneBackFP:condition + numForeperiod:oneBackFP:condition +
+                               numForeperiod:oneBackFP:condition:oneBacktrialType +
+                               (1 + condition + oneBacktrialType | ID),
+                             data=goData2,
+                             control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                             progress = TRUE,
+                             expand_re = TRUE,
+                             method =  'KR',
+                             REML=TRUE,
+                             return = "merMod",
+                             check_contrasts = FALSE)
+
+summary(trimfplmmtrialtype4)
+
+anova(trimfplmmtrialtype4)
+
+# emm
+Fp_by_Previous=emtrends(trimfplmmtrialtype4, "oneBackFP", var = "numForeperiod")
+Fp_by_Previous
+update(pairs(Fp_by_Previous), by = NULL, adjust = "holm")
+
+Fp_by_Previous=emtrends(trimfplmmtrialtype4, c("condition", "oneBackFP"), var = "numForeperiod")
+Fp_by_Previous
+update(pairs(Fp_by_Previous), by = NULL, adjust = "none")
+
+# 4.2.2.2. 1/RT
+triminvfplmmtrialtype4 <- buildmer(invRT ~ numForeperiod * condition * numOneBackFP * oneBacktrialType + 
+                                     (1 + numForeperiod * condition * numOneBackFPGo * oneBacktrialType |ID), 
+                                   data=goData2,
+                                   buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
+
+formula(triminvfplmmtrialtype4)
+
+isSingular(triminvfplmmtrialtype4)
+
+triminvfplmmtrialtype4 <- mixed(invRT ~ 1 + numForeperiod + numOneBackFP + numForeperiod:numOneBackFP + 
+                                  oneBacktrialType + condition + numForeperiod:condition + 
+                                  oneBacktrialType:condition + numForeperiod:oneBacktrialType + 
+                                  numOneBackFP:oneBacktrialType + numForeperiod:numOneBackFP:oneBacktrialType + 
+                                  numOneBackFP:condition + numForeperiod:numOneBackFP:condition + 
+                                  numOneBackFP:oneBacktrialType:condition + (1 + condition + 
+                                                                               oneBacktrialType | ID),
+                                data=goData2,
+                                control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                                progress = TRUE,
+                                expand_re = TRUE,
+                                method =  'KR',
+                                REML=TRUE,
+                                return = "merMod",
+                                check_contrasts = FALSE)
+
+summary(triminvfplmmtrialtype4)
+
+anova(triminvfplmmtrialtype4)
+
+#=========== 4.2.3. Categorical variables ============
+
+# 4.2.3.1. RT
+trimfplmmtrialtype5 <- buildmer(RT ~ foreperiod * condition * oneBackFP * oneBacktrialType + 
+                                  (1+foreperiod * condition * oneBackFP * oneBacktrialType|ID), 
+                                data=goData2,
+                                buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
+
+formula(trimfplmmtrialtype5)
+
+isSingular(trimfplmmtrialtype5)
+
+trimfplmmtrialtype5 <- mixed(RT ~ 1 + foreperiod + oneBackFP + foreperiod:oneBackFP + condition + 
                                oneBacktrialType + foreperiod:condition + condition:oneBacktrialType + 
                                foreperiod:oneBacktrialType + oneBackFP:condition + foreperiod:oneBackFP:condition + 
                                foreperiod:oneBackFP:oneBacktrialType + condition:oneBackFP:oneBacktrialType + 
@@ -991,7 +1122,7 @@ trimfplmmtrialtype4 <- mixed(RT ~ 1 + foreperiod + oneBackFP + foreperiod:oneBac
                              return = "merMod")#,
                              #check_contrasts = FALSE)
 
-trimfplmmtrialtype4 <- mixed(RT ~ foreperiod * condition * oneBackFP * oneBacktrialType +
+trimfplmmtrialtype5 <- mixed(RT ~ foreperiod * condition * oneBackFP * oneBacktrialType +
                                (1 + condition + oneBacktrialType + condition:oneBacktrialType | 
                                   ID),
                              data=goData2,
@@ -1002,11 +1133,11 @@ trimfplmmtrialtype4 <- mixed(RT ~ foreperiod * condition * oneBackFP * oneBacktr
                              REML=TRUE,
                              return = "merMod")
 
-summary(trimfplmmtrialtype4)
+summary(trimfplmmtrialtype5)
 
-anova(trimfplmmtrialtype4)
+anova(trimfplmmtrialtype5)
 
-#=========== By condition ===============
+#=========== 4.3. By condition ===============
 tt4action <- buildmer(RT ~ foreperiod * oneBackFP * oneBacktrialType + 
                   (1+foreperiod * oneBackFP * oneBacktrialType|ID), 
                   data=filter(goData2, condition == "action"),
@@ -1118,7 +1249,7 @@ summary(ttinv4external)
 
 anova(ttinv4external)
 
-#============ by trial type ==================
+#============ 4.4. by trial type ==================
 
 # Go
 tt4go <- buildmer(RT ~ foreperiod * oneBackFP * condition + 
@@ -1334,6 +1465,33 @@ fpDifflmm <- buildmer(invRT ~ foreperiod * condition * oneBackFPDiff +
                       buildmerControl = buildmerControl(include = ~ foreperiod * condition * oneBackFPDiff, calc.anova = TRUE, ddf = "Satterthwaite"))
 
 
+#================= 8.4. Model using prevFPLonger =======================
+trimprevfplonglmm1 <- buildmer(RT ~ foreperiod * condition * prevFPLonger + 
+                                 (1 + foreperiod * condition * prevFPLonger|ID), 
+                               data = goData2,
+                               buildmerControl = list(#direction='backward',
+                                 crit='LRT',#ddf = "Satterthwaite",
+                                 family=gaussian(link = 'identity'),
+                                 calc.anova = TRUE))
+
+formula(trimprevfplonglmm1)
+
+# Model using prevFPLonger
+trimprevfplonglmm1 <- mixed(formula = RT ~ 1 + foreperiod + prevFPLonger + condition + foreperiod:prevFPLonger + 
+                              prevFPLonger:condition + foreperiod:condition + foreperiod:prevFPLonger:condition + 
+                              (1 + condition | ID),
+                            data = goData3,
+                            control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                            progress = TRUE,
+                            expand_re = TRUE,
+                            method =  'S',
+                            REML=TRUE,
+                            return = "merMod")
+
+isSingular(trimprevfplonglmm1)
+
+summary(trimprevfplonglmm1)
+anova(trimprevfplonglmm1)
 #==============================================================================================#
 #============================== 6. Model with scaled numerical predictors ======================
 #==============================================================================================#
