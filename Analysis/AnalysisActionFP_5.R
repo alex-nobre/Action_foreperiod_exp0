@@ -154,6 +154,30 @@ contrasts(summaryData2$oneBackFP) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2
 contrasts(summaryData2$oneBackFPGo) <- contr.treatment(4)-matrix(rep(1/4,12),ncol=3)
 
 #==================== 2.1. FP x RT by condition ======================
+rt_by_fp_cond_part <- ggplot(data = summaryData3,
+                             aes(x = foreperiod,
+                                 y = meanRT,
+                                 color = condition)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.2, geom = "errorbar") + 
+  labs(title = "RT by condition",
+       x = "Foreperiod",
+       y = "Mean RT",
+       color = "Condition") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.2))) +
+  scale_color_manual(values = c("orange", "blue"), labels = c("External", "Action")) +
+  facet_wrap(~ ID)
+ggplot2::ggsave("./Analysis/Plots/RT_by_cond_fp_part.png",
+                rt_by_fp_cond_part,
+                width = 6.7,
+                height = 5)
+
 lines_by_condition <- ggplot(data = summaryData3,
        aes(x = foreperiod,
            y = meanRT,
@@ -675,172 +699,35 @@ anova(seqEFffregression)
 logseqEffregression <- lm(meanRT~logFP*logoneBackFP*condition,
                           data=summaryData) 
 anova(logseqEffregression)
-#===============================================================#
-#============================= Plots ============================
-#===============================================================#
 
-# Only by foreperiod
-ggplot(data = summaryData,
-       aes(x = foreperiod,
-           y = meanRT,
-           group = 1)) +
+#==========================================================================================#
+#===================== 3. Plots for between-experiments comparisons ========================
+#==========================================================================================#
+extrFPData <- summaryData2 %>%
+  filter(foreperiod %in% c("600", "1800")) %>%
+  mutate(foreperiod = fct_relevel(foreperiod, c("600", "1800")))
+
+rt_extr_fps_part <- ggplot(data = extrFPData,
+                              aes(x = foreperiod,
+                                  y = meanRT,
+                                  color = condition)) +
   stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line") +
-  stat_summary(fun.data = "mean_cl_boot", width = 0.2, geom = "errorbar") +
-  theme(panel.grid.major = element_blank(), 
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = condition)) +
+  stat_summary(fun.data = "mean_cl_boot", geom = "errorbar", linewidth = 0.8, width = 0.2) +
+  labs(title = "RT by condition",
+       x = "Foreperiod",
+       y = "Mean RT",
+       color = "Condition") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.5)),
-        axis.title = element_text(size = rel(1.5)))
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.2))) +
+  scale_color_manual(values = c("orange", "blue"), labels = c("External", "Action")) +
+  facet_wrap(~ ID)
 
-
-# Sequential effects (aggregated across conditions)
-ggplot(data = summaryData2,
-       aes(x = oneBackFP,
-           y = meanRT)) +
-  stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", size = 0.8) +
-  stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.2, geom = "errorbar") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.5)),
-        axis.title = element_text(size = rel(1.5)))
-
-
-# Sequential effects (separated by condition)
-ggplot(data = summaryData,
-       aes(x = foreperiod,
-           y = meanRT,
-           color = oneBackFP)) +
-  stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", size = 0.8, aes(group = oneBackFP)) +
-  stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.2, geom = "errorbar") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.5)),
-        axis.title = element_text(size = rel(1.5))) +
-  facet_wrap(~condition) +
-  scale_color_manual(values = c('blue','orange','green'))
-
-# Sequential effects (separated by oneBackFP)
-ggplot(data = summaryData,
-       aes(x = foreperiod,
-           y = meanRT,
-           color = condition)) +
-  stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", size = 0.8, aes(group = condition)) +
-  stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.2, geom = "errorbar") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.5)),
-        axis.title = element_text(size = rel(1.5))) +
-  facet_wrap(~oneBackFP) +
-  scale_color_manual(values = c('orange','blue'))
-
-
-
-# Only action data
-ggplot(data = filter(summaryData, condition == "action"),
-       aes(x = foreperiod,
-           y = meanRT)) +
-  stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line" ) +
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.5)),
-        axis.title = element_text(size = rel(1.5)))
-
-# Accuracy
-ggplot(data = goData,
-       aes(x = foreperiod,
-           y = Acc)) +
-  stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line") +
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.5)),
-        axis.title = element_text(size = rel(1.5)))
-
-# Fit by participant
-ggplot(data = goData,
-       aes(x = foreperiod,
-           y = RT,
-           color = condition)) +
-  stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", size = 1, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", width = 0.2, geom = "errorbar") +
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.0)),
-        axis.title = element_text(size = rel(1.0))) +
-  facet_wrap(~ID) +
-  scale_color_manual
-
-# Fit by participant
-ggplot(data = goData,
-       aes(x = foreperiod,
-           y = RT)) +
-  stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", size = 1, aes(group=1)) +
-  stat_summary(fun.data = "mean_cl_boot", width = 0.2, geom = "errorbar") +
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.0)),
-        axis.title = element_text(size = rel(1.0))) +
-  facet_wrap(~ID) +
-  scale_color_manual(values = c("orange","blue"))
-  #ylim(0.25,0.55)
-
-# Boxplots
-boxplots <- ggplot(data=summaryData,
-                   aes(x=foreperiod,
-                       y=meanRT,
-                       color=condition))+
-  geom_boxplot()+
-  scale_color_manual(values=c('orange','blue'))+
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank())
-
-boxplots
-
-
-logBoxplots <- ggplot(data=summaryData,
-                   aes(x=foreperiod,
-                       y=meanLogRT,
-                       color=condition))+
-  geom_boxplot()+
-  scale_color_manual(values=c('orange','blue'))+
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank())
-
-logBoxplots
-
-
-# Histograms
-histograms <- ggplot(data=summaryData,
-                     aes(x=meanRT,
-                         color=foreperiod))+
-  geom_histogram()+
-  facet_grid(foreperiod~condition)+
-  theme(panel.grid.major = element_blank(), 
-      panel.grid.minor = element_blank(),
-      panel.background = element_blank())
-
-histograms <- ggplot(data=goData,
-                     aes(x=RT))+
-  geom_histogram()+
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank()) +
-  facet_wrap(~ID)
-
-
+ggsave("./Analysis/Plots/rt_extr_fps_part.png",
+       rt_extr_fps_part,
+       width = 6.7,
+       height = 5)

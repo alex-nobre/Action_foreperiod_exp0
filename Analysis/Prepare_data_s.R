@@ -1,4 +1,7 @@
 
+#====================================================================================#
+# Create dataset with numerical variables in seconds instead of milliseconds
+#====================================================================================#
 
 # Load necessary packages
 library(readr)
@@ -18,14 +21,7 @@ data <- data %>%
                 foreperiod, RT, counterbalance, 
                 extFixationDuration, action_trigger.rt,
                 oneBackFP, twoBackFP, oneBacktrialType, twoBacktrialType, 
-                oneBackEffect) %>%
-  mutate(foreperiod = foreperiod * 1000,
-         RT = RT *1000,
-         extFixationDuration = extFixationDuration * 1000,
-         action_trigger.rt = action_trigger.rt * 1000,
-         oneBackFP = oneBackFP * 1000,
-         twoBackFP = twoBackFP * 1000,
-         oneBackEffect = oneBackEffect * 1000)
+                oneBackEffect)
 
 # Coerce to factors
 data$ID <- as.factor(data$ID)
@@ -69,33 +65,14 @@ data <- data %>%
   mutate(prevFPLonger = fct_relevel(prevFPLonger, c("0", "1"))) %>%
   ungroup()
 
-# Create column for difference between current and previous FP:
-# If FPn-1 is shorter than the current FP, value is 1
-# If FPn-1 is equal to the current FP, value is 1
-# If FPn-1 is longer than the current FP, value is -1
-# If the previous trial was a no-go trial, use this as separate category
-# oneBackFPDiff <- diff(as.numeric(as.character(data$foreperiod)))
-# oneBackFPDiff <- c(NA, oneBackFPDiff)
-# data$numOneBackFPDiff <- oneBackFPDiff
-# 
-# 
-# data <- data %>%
-#   mutate(oneBackFPDiff = case_when(oneBacktrialType=="no-go" ~ "no-go",
-#                                    numOneBackFPDiff>0 ~ "1",
-#                                    numOneBackFPDiff<0 ~ "-1",
-#                                    numOneBackFPDiff==0 ~ "0")
-#          ) %>%
-#   mutate(oneBackFPDiff = as.factor(oneBackFPDiff)) %>%
-#   mutate(oneBackFPDiff=forcats::fct_relevel(oneBackFPDiff, c("no-go", "-1", "0", "1")))
-
 # Column for FP n-1 including no-go
 data <- data %>%
   mutate(oneBackFPGo = factor(case_when(oneBacktrialType == "no-go" ~ "no-go",
-                                 oneBackFP == "600" ~ "600",
-                                 oneBackFP == "1200" ~ "1200",
-                                 oneBackFP == "1800" ~ "1800")))
+                                 oneBackFP == "0.6" ~ "0.6",
+                                 oneBackFP == "1.2" ~ "1.2",
+                                 oneBackFP == "1.8" ~ "1.8")))
 
-data$oneBackFPGo <- forcats::fct_relevel(data$oneBackFPGo, c("600", "1200", "1800", "no-go"))
+data$oneBackFPGo <- forcats::fct_relevel(data$oneBackFPGo, c("0.6", "1.2", "1.8", "no-go"))
   
 # Remove trials without n-1 FP values (i.e., first of each block)
 data <- data %>%
@@ -124,7 +101,6 @@ dataAll$numLogFP <- log10(dataAll$numForeperiod)
 dataAll$logFP <- log10(dataAll$numForeperiod)
 dataAll$logOneBackFP <- log10(dataAll$numOneBackFP)
 
-
 dataAll$squaredNumForeperiod <-  (dataAll$numForeperiod)^2
 dataAll$squaredNumOneBackFP <- (dataAll$numOneBackFP)^2
 dataAll$scaledNumForeperiod <-  scale(dataAll$numForeperiod, scale = FALSE)[,1]
@@ -138,8 +114,8 @@ dataAll$acc_result <- as.factor(dataAll$Acc)
 
 # Remove extreme values
 goData <- goData %>%
-  filter(RT < 1000) %>%
-  filter(RT > 150)
+  filter(RT < 1.0) %>%
+  filter(RT > 0.15)
 
 # Create quadratic values of continuous predictors
 goData$squaredNumForeperiod <-  (goData$numForeperiod)^2
