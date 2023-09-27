@@ -28,6 +28,8 @@ library(MuMIn)
 library(buildmer)
 library(broom.mixed)
 
+# Post-hocs
+library(marginaleffects)
 
 # Save defaults
 graphical_defaults <- par()
@@ -37,7 +39,7 @@ options_defaults <- options()
 emm_options(lmer.df = "satterthwaite", lmerTest.limit = 12000)
 
 # Read data
-source('./Analysis/Prepare_data_s.R')
+source('./Analysis/Prepare_data_4.R')
 
 #======================================= 0. Functions ======================================
 hist_resid <- function(M,ptitle='Residuals') {
@@ -529,69 +531,91 @@ trimlogfplmm <- mixed(formula = logRT ~ 1 + scaledNumForeperiod + oneBackFP + sc
                     data=goData2,
                     control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
                     progress = TRUE,
-                    expand_re = TRUE,
+                    expand_re = FALSE,
                     method =  'KR',
                     REML=TRUE,
                     return = "merMod")
 
 anova(trimlogfplmm)
 
+
 #Visualize random effects
 dotplot(ranef(trimlogfplmm, condVar = TRUE))
 
-# emm
+# Single slopes tests
+fp_by_condition <- slopes(trimlogfplmm, by = "condition", variables = "scaledNumForeperiod",
+                          p_adjust = "holm")
+
+test(emtrends(trimlogfplmm, ~ condition, var="scaledNumForeperiod")) # equivalent to slopes
+
+fp_by_oneback <- slopes(trimlogfplmm, by = "oneBackFP", variables = "scaledNumForeperiod",
+                        p_adjust = "holm")
+
+test(emtrends(trimlogfplmm, ~ oneBackFP, var="scaledNumForeperiod")) # equivalent to slopes
+
+threeway_int <- slopes(trimlogfplmm, by = c("oneBackFP", "condition"), variables = "scaledNumForeperiod",
+                        p_adjust = "holm")
+
+
+
+
+# Pairwise comparisons
+fp_by_condition_comp <- emtrends(trimlogfplmm, "condition", var = "scaledNumForeperiod")
+fp_by_condition_comp
+update(pairs(fp_by_condition_comp), by = NULL, adjust = "holm")
+
 Fp_by_Previous=emtrends(trimlogfplmm, "oneBackFP", var = "scaledNumForeperiod")
 Fp_by_Previous
 update(pairs(Fp_by_Previous), by = NULL, adjust = "holm")
 
-Fp_by_Previous=emtrends(trimlogfplmm, c("condition", "oneBackFP"), var = "scaledNumForeperiod")
-Fp_by_Previous
-update(pairs(Fp_by_Previous), by = NULL, adjust = "none")
+threeway_int_comp = emtrends(trimlogfplmm, c("condition", "oneBackFP"), var = "scaledNumForeperiod")
+threeway_int_comp
+update(pairs(threeway_int_comp), by = NULL, adjust = "holm")
 
 # Same but without n-1 no-go trials
-trimlogfplmm <- buildmer(logRT ~ scaledNumForeperiod * condition * oneBackFP + 
+trimlogfplmmGo <- buildmer(logRT ~ scaledNumForeperiod * condition * oneBackFP + 
                          (1 + scaledNumForeperiod * condition * oneBackFP|ID), 
                        data=goData3,
                        buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
 
-isSingular(trimlogfplmm)
-formula(trimlogfplmm)
+isSingular(trimlogfplmmGo)
+formula(trimlogfplmmGo)
 
 
-trimlogfplmm <- mixed(formula = logRT ~ 1 + scaledNumForeperiod + oneBackFP + scaledNumForeperiod:oneBackFP + 
+trimlogfplmmGo <- mixed(formula = logRT ~ 1 + scaledNumForeperiod + oneBackFP + scaledNumForeperiod:oneBackFP + 
                         condition + scaledNumForeperiod:condition + oneBackFP:condition + 
                         scaledNumForeperiod:oneBackFP:condition +
                         (1 + condition + scaledNumForeperiod | ID),
                     data=goData3,
                     control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
                     progress = TRUE,
-                    expand_re = TRUE,
+                    expand_re = FALSE,
                     method =  'KR',
                     REML=TRUE,
                     return = "merMod")
 
-anova(trimlogfplmm)
+anova(trimlogfplmmGo)
 
 # emm
 Fp_by_Previous=emtrends(trimlogfplmm, "oneBackFP", var = "scaledNumForeperiod")
 Fp_by_Previous
 update(pairs(Fp_by_Previous), by = NULL, adjust = "holm")
 
-Fp_by_Previous=emtrends(trimlogfplmm, c("condition", "oneBackFP"), var = "scaledNumForeperiod")
-Fp_by_Previous
-update(pairs(Fp_by_Previous), by = NULL, adjust = "none")
 
+threeway_int_comp_Go = emtrends(trimlogfplmmGo, c("condition", "oneBackFP"), var = "scaledNumForeperiod")
+threeway_int_comp_Go
+update(pairs(threeway_int_comp_Go), by = NULL, adjust = "holm")
 
 # Now without n-1 go trials
-trimlogfplmm <- buildmer(logRT ~ scaledNumForeperiod * condition * oneBackFP + 
+trimlogfplmmNoGo <- buildmer(logRT ~ scaledNumForeperiod * condition * oneBackFP + 
                          (1 + scaledNumForeperiod * condition * oneBackFP|ID), 
                        data=filter(goData2, oneBacktrialType == "no-go"),
                        buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
 
-isSingular(trimlogfplmm)
-formula(trimlogfplmm)
+isSingular(trimlogfplmmNoGo)
+formula(trimlogfplmmNoGo)
 
-trimlogfplmm <- mixed(formula = logRT ~ 1 + scaledNumForeperiod + condition + oneBackFP + scaledNumForeperiod:condition + 
+trimlogfplmmNoGo <- mixed(formula = logRT ~ 1 + scaledNumForeperiod + condition + oneBackFP + scaledNumForeperiod:condition + 
                      scaledNumForeperiod:oneBackFP + scaledNumForeperiod:condition:oneBackFP + 
                      (1 + condition | ID),
                     data=filter(goData2, oneBacktrialType == "no-go"),
@@ -602,8 +626,8 @@ trimlogfplmm <- mixed(formula = logRT ~ 1 + scaledNumForeperiod + condition + on
                     REML=TRUE,
                     return = "merMod")
 
-summary(trimlogfplmm)
-anova(trimlogfplmm)
+summary(trimlogfplmmNoGo)
+anova(trimlogfplmmNoGo)
 
 # emm
 Fp_by_Previous=emtrends(trimlogfplmm, "oneBackFP", var = "scaledNumForeperiod")
@@ -1052,6 +1076,53 @@ triminvfplmmtrialtype4 <- mixed(invRT ~ 1 + numForeperiod + numOneBackFP + numFo
 summary(triminvfplmmtrialtype4)
 
 anova(triminvfplmmtrialtype4)
+
+# 4.2.2.3. logRT
+trimlogfplmmtrialtype <- buildmer(logRT ~ scaledNumForeperiod * condition * oneBacktrialType + 
+                                  (1 + scaledNumForeperiod * condition * oneBacktrialType |ID), 
+                                data=goData2,
+                                buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite"))
+
+formula(trimlogfplmmtrialtype)
+
+isSingular(trimlogfplmmtrialtype)
+
+trimlogfplmmtrialtype <- mixed(logRT ~ 1 + scaledNumForeperiod + oneBacktrialType + condition + 
+                                 scaledNumForeperiod:condition + oneBacktrialType:condition + 
+                                 scaledNumForeperiod:oneBacktrialType + scaledNumForeperiod:oneBacktrialType:condition + 
+                                 (1 + condition + oneBacktrialType + scaledNumForeperiod + 
+                                    condition:oneBacktrialType | ID),
+                             data=goData2,
+                             control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                             progress = TRUE,
+                             expand_re = FALSE,
+                             method =  'KR',
+                             REML=TRUE,
+                             return = "merMod")
+
+summary(trimlogfplmmtrialtype)
+
+anova(trimlogfplmmtrialtype)
+
+# Pairwise comparisons
+cond_trialtype <- emmeans(trimlogfplmmtrialtype, ~ oneBacktrialType | condition)
+pairs(cond_trialtype)
+
+fp_trialtype <- emtrends(trimlogfplmmtrialtype, "oneBacktrialType", var = "scaledNumForeperiod")
+pairs(fp_trialtype)
+
+Fp_by_Previous=emtrends(trimlogfplmmtrialtype, "oneBackFP", var = "scaledNumForeperiod")
+Fp_by_Previous
+update(pairs(Fp_by_Previous), by = NULL, adjust = "holm")
+
+Fp_by_Previous=emtrends(trimlogfplmmtrialtype, c("condition", "oneBacktrialType"), var = "scaledNumForeperiod")
+Fp_by_Previous
+update(pairs(Fp_by_Previous), by = NULL, adjust = "none")
+
+three_way_trialtype = emtrends(trimlogfplmmtrialtype, ~ condition | oneBacktrialType, var = "scaledNumForeperiod")
+con <- pairs(three_way_trialtype, simple = "condition")
+contrast(con, "pairwise", by = NULL)
+
 
 #=========== 4.2.3. Categorical variables ============
 
@@ -1524,31 +1595,91 @@ summary(scaledtrimlogfplmm1)
 #===============================================================================================#
 #===================================== 7. Accuracy ==============================================
 #===============================================================================================#
+dataAcc <- dataAcc %>%
+  filter(ID != "002")
 
-fpacc1stlevel <- glmer(acc_result ~ 1 + scaledNumForeperiod * condition * scaledNumOneBackFP +
-                         (1 + condition | ID),
-                       data = dataAll,
+dataAccGo <- dataAccGo %>%
+  filter(ID != "002")
+
+dataAccNoGo <- dataAccNoGo %>%
+  filter(ID != "002")
+
+# 7.1. all trials
+fpaccglmer <- buildmer(error_result ~ scaledNumForeperiod * condition + 
+                        (1+scaledNumForeperiod*condition|ID), 
+                      data=dataAcc,
+                      family = binomial(link = "logit"),
+                      buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite",
+                                                        include = ~ scaledNumForeperiod:condition))
+
+isSingular(fpaccglmer)
+formula(fpaccglmer)
+
+fpaccglmer <- mixed(formula = error_result ~ 1 + condition + scaledNumForeperiod + 
+                         scaledNumForeperiod:condition + (1 + scaledNumForeperiod | ID),
+                       data=dataAcc,
                        family = binomial(link = "logit"),
-                       control = glmerControl(optimizer = c("bobyqa"),
-                                              optCtrl = list(maxfun = 2e5)))
+                       control = glmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5)),
+                       progress = TRUE,
+                       expand_re = FALSE,
+                       method = "LRT")
 
 
-isSingular(fpacc1stlevel)
+anova(fpaccglmer)
 
-summary(fpacc1stlevel)
+test(emtrends(fpaccglmer, "condition", var = "scaledNumForeperiod"))
+
+slopes(fpaccglmer, by = "condition", variables = "scaledNumForeperiod")
+
+marginalmeans(fpaccglmer, type = "response", variables = c("condition", "scaledNumForeperiod"))
 
 
-fpacc2ndlevel <- glmer(acc_result ~ 1 + (scaledNumForeperiod + squaredScaledNumForeperiod) * condition * scaledNumOneBackFP +
-                         (1 + condition | ID),
-                       data = dataAll,
+# 7.2. only go trials
+goaccglmer <- buildmer(error_result ~ scaledNumForeperiod * condition + 
+                            (1+scaledNumForeperiod*condition|ID), 
+                          data=dataAccGo,
+                          family = binomial(link = "logit"),
+                          buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite",
+                                                            include = ~ scaledNumForeperiod:condition))
+
+
+isSingular(goaccglmer)
+formula(goaccglmer)
+
+goaccglmer <- mixed(formula = error_result ~ 1 + scaledNumForeperiod + condition + scaledNumForeperiod:condition + 
+                      (1 + condition | ID),
+                    data=dataAccGo,
+                    family = binomial(link = "logit"),
+                    control = glmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5)),
+                    progress = TRUE,
+                    expand_re = FALSE,
+                    method = "LRT")
+
+anova(goaccglmer)
+
+accgo_fp_condition <- emtrends(goaccglmer, "condition", var = "scaledNumForeperiod")
+
+
+# 7.2. only no-go trials
+nogoaccglmer <- buildmer(error_result ~ scaledNumForeperiod * condition + 
+                         (1+scaledNumForeperiod*condition|ID), 
+                       data=dataAccNoGo,
                        family = binomial(link = "logit"),
-                       control = glmerControl(optimizer = c("bobyqa"),
-                                              optCtrl = list(maxfun = 2e5)))
+                       buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite",
+                                                         include = ~ scaledNumForeperiod:condition))
 
-isSingular(fpacc2ndlevel)
+isSingular(nogoaccglmer)
+formula(nogoaccglmer)
 
-summary(fpacc2ndlevel)
+nogoaccglmer <- mixed(formula = error_result ~ 1 + scaledNumForeperiod + condition + scaledNumForeperiod:condition + 
+                        (1 + scaledNumForeperiod | ID),
+                    data=dataAccNoGo,
+                    family = binomial(link = "logit"),
+                    control = glmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5)),
+                    progress = TRUE,
+                    expand_re = FALSE,
+                    method = "LRT")
 
-anova(fpacc2ndlevel)
+anova(nogoaccglmer)
 
-anova(fpacc2ndlevel, fpacc1stlevel)
+accnogo_fp_condition <- emtrends(nogoaccglmer, "condition", var = "scaledNumForeperiod")

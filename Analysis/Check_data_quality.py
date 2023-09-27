@@ -9,14 +9,15 @@ import pandas as pd
 import glob
 import os
 
-os.chdir('E:/Post-doc_data/Sync/Pavlovia')
+filesPath = '.\Data'
 
-fileList=glob.glob('./*.csv')
+fileList=glob.glob(filesPath + './*.csv')
 fileList.sort()
 
 nFiles=int(len(fileList))
 
-qualityTable = pd.DataFrame(columns=['participant','errorRateAll','errorRateGo','errorRateNoGo','trimmedRTRate'])
+qualityTable = pd.DataFrame(columns=['participant','errorRateAll','errorRateGo','errorRateNoGo',
+'errorRateAction', 'errorRateExternal', 'trimmedRTRate'])
 
 for file in fileList:
      subData=pd.read_csv(file)
@@ -39,7 +40,8 @@ for file in fileList:
      errorRateAll=(len(subData[subData['Response.corr']==0])/len(subData)) * 100 # overall
      errorRateGo=(len(subData[(subData['Response.corr']==0)&(subData['trialType']=='go')])/len(subData[subData['trialType']=='go'])) * 100 # go trials
      errorRateNoGo=(len(subData[(subData['Response.corr']==0)&(subData['trialType']=='no-go')])/len(subData[subData['trialType']=='no-go'])) * 100 # no-go trials
-     
+     errorRateAction=(len(subData[(subData['Response.corr']==0)&(subData['condition']=='action')])/len(subData[subData['condition']=='action'])) * 100 # action condition
+     errorRateExternal=(len(subData[(subData['Response.corr']==0)&(subData['condition']=='external')])/len(subData[subData['condition']=='external'])) * 100 # external condition
      
      # Percentage of trials excluded due to RT trimming
      subData=subData[(subData['trialType']=='go')&(subData['RT'].notnull())&(subData['Response.corr']==1)]
@@ -47,8 +49,8 @@ for file in fileList:
      trimmedRTRate=(len(trimmedRTs)/len(subData)) * 100
      
      subQualityData=[participantID,errorRateAll,errorRateGo,
-                     errorRateNoGo,trimmedRTRate]
+                     errorRateNoGo,errorRateAction, errorRateExternal, trimmedRTRate]
      
      qualityTable.loc[len(qualityTable.index)]=subQualityData
  
-qualityTable.to_csv('G:/My Drive/Post-doc/Experimento 1/Analysis/data_quality.csv')
+qualityTable.to_csv('./Analysis/data_quality.csv')

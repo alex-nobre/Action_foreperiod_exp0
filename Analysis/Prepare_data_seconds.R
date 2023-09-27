@@ -24,19 +24,11 @@ data <- data %>%
                 oneBackEffect)
 
 # Coerce to factors
-data$ID <- as.factor(data$ID)
-data$condition <- data$condition %>%
-  as.factor() %>%
-  forcats::fct_relevel(c("external", "action"))
-data$block <- as.factor(data$block)
-data$trialType <- as.factor(data$trialType)
-data$foreperiod <- as.factor(data$foreperiod)
-data$counterbalance <- as.factor(data$counterbalance)
-data$oneBackFP <- as.factor(data$oneBackFP)
-data$twoBackFP <- as.factor(data$twoBackFP)
-data$oneBacktrialType <- as.factor(data$oneBacktrialType)
-data$twoBacktrialType <- as.factor(data$twoBacktrialType)
+data <- data %>%
+  mutate(across(c(ID, condition, block, trialType, foreperiod, counterbalance, oneBackFP, twoBackFP, oneBacktrialType, twoBacktrialType), as_factor))
 
+data$condition <- data$condition %>%
+  fct_relevel(c("external", "action"))
 
 # Remove practice trials
 data <- data %>%
@@ -76,10 +68,17 @@ data$oneBackFPGo <- forcats::fct_relevel(data$oneBackFPGo, c("0.6", "1.2", "1.8"
   
 # Remove trials without n-1 FP values (i.e., first of each block)
 data <- data %>%
-  filter(!is.na(oneBackFP), !is.na(twoBackFP))
+  filter(!is.na(oneBackFP))
 
 # Save data with error trials to assess accuracy
-dataAll <- data
+dataAcc <- data
+
+# Split between go and no-go trials for acc
+dataAccGo <- dataAcc %>%
+  filter(trialType == "go")
+
+dataAccNoGo <- dataAcc %>%
+  filter(trialType == "no-go")
 
 # Keep only go trials with correct responses to analyze RT
 goData <- data %>%
@@ -89,33 +88,70 @@ goData <- data %>%
 goData$numForeperiod <- as.numeric(as.character(goData$foreperiod))
 goData$numOneBackFP <- as.numeric(as.character(goData$oneBackFP))
 
-dataAll$numForeperiod <- as.numeric(as.character(dataAll$foreperiod))
-dataAll$numOneBackFP <- as.numeric(as.character(dataAll$oneBackFP))
+dataAcc$numForeperiod <- as.numeric(as.character(dataAcc$foreperiod))
+dataAcc$numOneBackFP <- as.numeric(as.character(dataAcc$oneBackFP))
+
+dataAccGo$numForeperiod <- as.numeric(as.character(dataAccGo$foreperiod))
+dataAccGo$numOneBackFP <- as.numeric(as.character(dataAccGo$oneBackFP))
+
+dataAccNoGo$numForeperiod <- as.numeric(as.character(dataAccNoGo$foreperiod))
+dataAccNoGo$numOneBackFP <- as.numeric(as.character(dataAccNoGo$oneBackFP))
+
+# Create variable for error rate
+dataAcc$Error <- abs(dataAcc$Acc - 1)
+dataAccGo$Error <- abs(dataAccGo$Acc - 1)
+dataAccNoGo$Error <- abs(dataAccNoGo$Acc - 1)
 
 # Create log10 of continuous independent variables
 goData$numLogFP <- log10(goData$numForeperiod)
 goData$logFP <- log10(goData$numForeperiod)
 goData$logOneBackFP <- log10(goData$numOneBackFP)
 
-dataAll$numLogFP <- log10(dataAll$numForeperiod)
-dataAll$logFP <- log10(dataAll$numForeperiod)
-dataAll$logOneBackFP <- log10(dataAll$numOneBackFP)
+dataAcc$numLogFP <- log10(dataAcc$numForeperiod)
+dataAcc$logFP <- log10(dataAcc$numForeperiod)
+dataAcc$logOneBackFP <- log10(dataAcc$numOneBackFP)
 
-dataAll$squaredNumForeperiod <-  (dataAll$numForeperiod)^2
-dataAll$squaredNumOneBackFP <- (dataAll$numOneBackFP)^2
-dataAll$scaledNumForeperiod <-  scale(dataAll$numForeperiod, scale = FALSE)[,1]
-dataAll$squaredScaledNumForeperiod <- (dataAll$scaledNumForeperiod)^2
-dataAll$scaledNumOneBackFP <- scale(dataAll$numOneBackFP, scale = FALSE)[,1]
+dataAccGo$numLogFP <- log10(dataAccGo$numForeperiod)
+dataAccGo$logFP <- log10(dataAccGo$numForeperiod)
+dataAccGo$logOneBackFP <- log10(dataAccGo$numOneBackFP)
 
-# Factor version of accuracy
-goData$acc_result <- as.factor(goData$Acc)
+dataAccNoGo$numLogFP <- log10(dataAccNoGo$numForeperiod)
+dataAccNoGo$logFP <- log10(dataAccNoGo$numForeperiod)
+dataAccNoGo$logOneBackFP <- log10(dataAccNoGo$numOneBackFP)
 
-dataAll$acc_result <- as.factor(dataAll$Acc)
+dataAcc$squaredNumForeperiod <-  (dataAcc$numForeperiod)^2
+dataAcc$squaredNumOneBackFP <- (dataAcc$numOneBackFP)^2
+dataAcc$scaledNumForeperiod <-  scale(dataAcc$numForeperiod, scale = FALSE)[,1]
+dataAcc$squaredScaledNumForeperiod <- (dataAcc$scaledNumForeperiod)^2
+dataAcc$scaledNumOneBackFP <- scale(dataAcc$numOneBackFP, scale = FALSE)[,1]
+
+dataAccGo$squaredNumForeperiod <-  (dataAccGo$numForeperiod)^2
+dataAccGo$squaredNumOneBackFP <- (dataAccGo$numOneBackFP)^2
+dataAccGo$scaledNumForeperiod <-  scale(dataAccGo$numForeperiod, scale = FALSE)[,1]
+dataAccGo$squaredScaledNumForeperiod <- (dataAccGo$scaledNumForeperiod)^2
+dataAccGo$scaledNumOneBackFP <- scale(dataAccGo$numOneBackFP, scale = FALSE)[,1]
+
+dataAccNoGo$squaredNumForeperiod <-  (dataAccNoGo$numForeperiod)^2
+dataAccNoGo$squaredNumOneBackFP <- (dataAccNoGo$numOneBackFP)^2
+dataAccNoGo$scaledNumForeperiod <-  scale(dataAccNoGo$numForeperiod, scale = FALSE)[,1]
+dataAccNoGo$squaredScaledNumForeperiod <- (dataAccNoGo$scaledNumForeperiod)^2
+dataAccNoGo$scaledNumOneBackFP <- scale(dataAccNoGo$numOneBackFP, scale = FALSE)[,1]
+
+# Factor version of accuracy/error rate
+dataAcc$acc_result <- as.factor(dataAcc$Acc)
+dataAccGo$acc_result <- as.factor(dataAccGo$Acc)
+dataAccNoGo$acc_result <- as.factor(dataAccNoGo$Acc)
+
+dataAcc$error_result <- as.factor(dataAcc$Error)
+dataAccGo$error_result <- as.factor(dataAccGo$Error)
+dataAccNoGo$error_result <- as.factor(dataAccNoGo$Error)
 
 # Remove extreme values
+ntrials_before_extrem <- nrow(goData)
 goData <- goData %>%
   filter(RT < 1.0) %>%
   filter(RT > 0.15)
+ntrials_after_extrem <- nrow(goData)
 
 # Create quadratic values of continuous predictors
 goData$squaredNumForeperiod <-  (goData$numForeperiod)^2
@@ -245,11 +281,42 @@ summaryData3 <- goData3 %>%
          squaredScaledNumOneBackFPDiff = scaledNumOneBackFPDiff^2)
 
 # Including all trials for accuracy analysis
-summaryDataAll <- dataAll %>%
+summaryDataAcc <- dataAcc %>%
   group_by(ID,foreperiod,condition,
            oneBackFP, oneBacktrialType, oneBackFPGo) %>%
   summarise(meanRT = mean(RT),
             meanAcc = mean(Acc),
+            errorRate = mean(Error),
+            meanSeqEff = mean(oneBackEffect)) %>%
+  ungroup() %>%
+  mutate(numForeperiod = as.numeric(as.character(foreperiod)),
+         numOneBackFP = as.numeric(as.character(oneBackFP))) %>%
+  mutate(squaredNumForeperiod = numForeperiod^2,
+         scaledNumForeperiod = scale(numForeperiod)[,1],
+         squaredScaledNumForeperiod = scaledNumForeperiod^2,
+         scaledNumOneBackFP = scale(numOneBackFP)[,1])
+
+summaryDataAccGo <- dataAccGo %>%
+  group_by(ID,foreperiod,condition,
+           oneBackFP, oneBacktrialType, oneBackFPGo) %>%
+  summarise(meanRT = mean(RT),
+            meanAcc = mean(Acc),
+            errorRate = mean(Error),
+            meanSeqEff = mean(oneBackEffect)) %>%
+  ungroup() %>%
+  mutate(numForeperiod = as.numeric(as.character(foreperiod)),
+         numOneBackFP = as.numeric(as.character(oneBackFP))) %>%
+  mutate(squaredNumForeperiod = numForeperiod^2,
+         scaledNumForeperiod = scale(numForeperiod)[,1],
+         squaredScaledNumForeperiod = scaledNumForeperiod^2,
+         scaledNumOneBackFP = scale(numOneBackFP)[,1])
+
+summaryDataAccNoGo <- dataAccNoGo %>%
+  group_by(ID,foreperiod,condition,
+           oneBackFP, oneBacktrialType, oneBackFPGo) %>%
+  summarise(meanRT = mean(RT),
+            meanAcc = mean(Acc),
+            errorRate = mean(Error),
             meanSeqEff = mean(oneBackEffect)) %>%
   ungroup() %>%
   mutate(numForeperiod = as.numeric(as.character(foreperiod)),
@@ -260,6 +327,14 @@ summaryDataAll <- dataAll %>%
          scaledNumOneBackFP = scale(numOneBackFP)[,1])
 
 #write_csv(goData, "./Analysis/goData.csv")
-#write_csv(goData2, "./Analysis/goData2.csv")
+#write_csv(goData2, "./Analysis/goData2.csv"
+#write_csv(goData2, "./Analysis/goData3.csv")
+#write_csv(goData2, "./Analysis/dataAcc.csv")
+#write_csv(goData2, "./Analysis/dataAccGo.csv")
+#write_csv(goData2, "./Analysis/dataAccNoGo.csv")
 #write_csv(summaryData, "./Analysis/summaryData.csv")
 #write_csv(summaryData2, "./Analysis/summaryData2.csv")
+#write_csv(summaryData2, "./Analysis/summaryData3.csv")
+#write_csv(summaryData2, "./Analysis/summaryDataAcc.csv")
+#write_csv(summaryData2, "./Analysis/summaryDataAccGo.csv")
+#write_csv(summaryData2, "./Analysis/summaryDataAccNoGo.csv")
