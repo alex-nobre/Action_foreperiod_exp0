@@ -30,9 +30,26 @@ data <- data %>%
 data$condition <- data$condition %>%
   fct_relevel(c("external", "action"))
 
+# Column for testing position based on counterbalancing
+data <- data %>%
+  mutate(testPos = case_when((condition == 'action' & counterbalance == 'action-external') ~ '1',
+                             (condition == 'external' & counterbalance == 'action-external') ~ '2',
+                             (condition == 'action' & counterbalance == 'external-action') ~ '2',
+                             (condition == 'external' & counterbalance == 'external-action') ~ '1')) %>%
+  mutate(testPos = as.factor(testPos))
+
 # Remove practice trials
 data <- data %>%
   filter(condition != 'practice')
+
+# Create column for trial number
+data <- data %>%
+  group_by(ID) %>%
+  mutate(trial = seq(1,n())) %>%
+  ungroup() %>%
+  group_by(ID, block) %>%
+  mutate(trial_bl = seq(1, n())) %>%
+  ungroup()
 
 # Create numeric versions of foreperiod and FP n-1 (for computation of other variables)
 data$numForeperiod <- as.numeric(as.character(data$foreperiod))
@@ -207,6 +224,33 @@ goData <- goData %>%
   #filter(abs(logRTzscore) < 3) %>%
   ungroup()
 
+###############################################################
+# Add delay data
+###############################################################
+delayData <- read_csv("./Analysis/delayDataAll.csv") %>%
+  mutate(across(c(ID, condition), as_factor)) %>%
+  select(-condition)
+
+goData <- inner_join(goData, delayData, by = c("trial", "ID"))
+goData2 <- inner_join(goData2, delayData, by = c("trial", "ID"))
+goData3 <- inner_join(goData3, delayData, by = c("trial", "ID"))
+dataAcc <- inner_join(dataAcc, delayData, by = c("trial", "ID"))
+dataAccGo <- inner_join(dataAccGo, delayData, by = c("trial", "ID"))
+dataAccNoGo <- inner_join(dataAccNoGo, delayData, by = c("trial", "ID"))
+
+goData <- goData %>%
+  mutate(corRT = RT - delay)
+goData2 <- goData2 %>%
+  mutate(corRT = RT - delay)
+goData3 <- goData3 %>%
+  mutate(corRT = RT - delay)
+dataAcc <- dataAcc %>%
+  mutate(corRT = RT - delay)
+dataAccGo <- dataAccGo %>%
+  mutate(corRT = RT - delay)
+dataAccNoGo <- dataAccNoGo %>%
+  mutate(corRT = RT - delay)
+################################################################
 
 # Average data
 summaryData <- goData %>%
@@ -218,7 +262,8 @@ summaryData <- goData %>%
             meanLogRT = mean(logRT),
             meanRTzscore = mean(RTzscore),
             meanInvRT = mean(invRT),
-            meanSeqEff = mean(oneBackEffect)) %>%
+            meanSeqEff = mean(oneBackEffect),
+            meanCorRT = mean(corRT)) %>%
   ungroup() %>%
   mutate(numForeperiod=as.numeric(as.character(foreperiod)),
          numOneBackFP = as.numeric(as.character(oneBackFP)),
@@ -242,7 +287,8 @@ summaryData2 <- goData2 %>%
             meanLogRT = mean(logRT),
             meanRTzscore = mean(RTzscore),
             meanInvRT = mean(invRT),
-            meanSeqEff = mean(oneBackEffect)) %>%
+            meanSeqEff = mean(oneBackEffect),
+            meanCorRT = mean(corRT)) %>%
   ungroup() %>%
   mutate(numForeperiod=as.numeric(as.character(foreperiod)),
          numOneBackFP = as.numeric(as.character(oneBackFP)),
@@ -265,7 +311,8 @@ summaryData3 <- goData3 %>%
             meanLogRT = mean(logRT),
             meanRTzscore = mean(RTzscore),
             meanInvRT = mean(invRT),
-            meanSeqEff = mean(oneBackEffect)) %>%
+            meanSeqEff = mean(oneBackEffect),
+            meanCorRT = mean(corRT)) %>%
   ungroup() %>%
   mutate(numForeperiod=as.numeric(as.character(foreperiod)),
          numOneBackFP = as.numeric(as.character(oneBackFP)),
@@ -287,7 +334,8 @@ summaryDataAcc <- dataAcc %>%
   summarise(meanRT = mean(RT),
             meanAcc = mean(Acc),
             errorRate = mean(Error),
-            meanSeqEff = mean(oneBackEffect)) %>%
+            meanSeqEff = mean(oneBackEffect),
+            meanCorRT = mean(corRT)) %>%
   ungroup() %>%
   mutate(numForeperiod = as.numeric(as.character(foreperiod)),
          numOneBackFP = as.numeric(as.character(oneBackFP))) %>%
@@ -302,7 +350,8 @@ summaryDataAccGo <- dataAccGo %>%
   summarise(meanRT = mean(RT),
             meanAcc = mean(Acc),
             errorRate = mean(Error),
-            meanSeqEff = mean(oneBackEffect)) %>%
+            meanSeqEff = mean(oneBackEffect),
+            meanCorRT = mean(corRT)) %>%
   ungroup() %>%
   mutate(numForeperiod = as.numeric(as.character(foreperiod)),
          numOneBackFP = as.numeric(as.character(oneBackFP))) %>%
@@ -317,7 +366,8 @@ summaryDataAccNoGo <- dataAccNoGo %>%
   summarise(meanRT = mean(RT),
             meanAcc = mean(Acc),
             errorRate = mean(Error),
-            meanSeqEff = mean(oneBackEffect)) %>%
+            meanSeqEff = mean(oneBackEffect),
+            meanCorRT = mean(corRT)) %>%
   ungroup() %>%
   mutate(numForeperiod = as.numeric(as.character(foreperiod)),
          numOneBackFP = as.numeric(as.character(oneBackFP))) %>%

@@ -70,12 +70,7 @@ n_trials_comp <- left_join(n_notrim, n_trim) %>%
          percent_trimmed = (trimmed/n_trials_no_trim) * 100) %>%
   summarise(meanT = mean(percent_trimmed), sdT = sd(percent_trimmed))
 
-#==========================================================================================#
-#======================================= 1. Descriptives ==================================
-#==========================================================================================#
-#========== 1.1. Learning/fatigue effects ==============
-
-# 1.1.1. RTs across blocks (no condition)
+# RTs across blocks (no condition)
 ggplot(data=summaryData,
        aes(x=block,
            y=meanRT))+
@@ -87,9 +82,9 @@ ggplot(data=summaryData,
         panel.background=element_blank())
 
 ggplot(data=summaryData,
-                   aes(x=block,
-                       y=meanRT,
-                       color=condition))+
+       aes(x=block,
+           y=meanRT,
+           color=condition))+
   stat_summary(fun='mean',geom='point')+
   stat_summary(fun='mean',geom='line',size=1,aes(group=condition))+
   stat_summary(fun.data='mean_cl_boot',width=0.2,geom='errorbar')+
@@ -98,7 +93,7 @@ ggplot(data=summaryData,
         panel.background=element_blank())+
   scale_color_manual(values=c('orange','blue'))
 
-# 1.1.2. RTs across blocks by counterbalancing order
+# RTs across blocks by counterbalancing order
 ggplot(data=summaryData2,
        aes(x=block,
            y=meanRT,
@@ -119,7 +114,7 @@ ggplot(data=summaryData2,
 cor(goData2 %>% filter(condition == "external") %>% pull(RT),
     goData2 %>% filter(condition == "external") %>% pull(extFixationDuration))
 
- ggplot(data=filter(goData,condition=='external'),
+ggplot(data=filter(goData,condition=='external'),
        aes(x=extFixationDuration,
            y=RT,
            color=foreperiod))+
@@ -161,8 +156,34 @@ ggplot(data=filter(goData,condition=='action',
   facet_wrap(~foreperiod)
 
 ggsave("./Analysis/Plots/actiontrigpress.png",
-         width = 13.4,
-         height = 10)
+       width = 13.4,
+       height = 10)
+
+# Histograms of delays between action and WS
+ggplot(data = goData2) +
+  geom_histogram(aes(x = round(delay,3)))
+
+# Frequency of values in delay vector
+table(round(goData$delay, 3))
+
+# Plot RT against delay excluding zero-delay trials
+ggplot(data = filter(goData2, delay > 0, delay < 0.034), aes(x = delay, y = RT)) +
+  geom_point() +
+  geom_abline()
+
+# Plot RT against delay with best-fitting regression line
+ggplot(data = goData2, aes(x = delay, y = RT)) +
+  geom_point() +
+  geom_abline() +
+  ylim(c(0,1.0))
+
+# Correlation between RT and delay excluding zero-delay trials
+cor(filter(goData2, delay > 0)$delay, filter(goData2, delay > 0)$RT)
+
+#==========================================================================================#
+#======================================= 1. Descriptives ==================================
+#==========================================================================================#
+#========== 1.1. Plots ==============
   
 # Accuracy
 summaryAccData <- data %>%
@@ -248,13 +269,7 @@ ggplot2::ggsave("./Analysis/Plots/RT_by_condition.pdf",
                 height = 10)
 
 
-# Histograms
-rt_fp_cond_hists <- ggplot(goData2, aes(x = RT)) +
-  geom_histogram() +
-  facet_grid(foreperiod ~ condition)
-
-
-# Boxplot
+# Boxplot of RT by FP and condition
 boxplot_fp_condition <- ggplot(data = summaryData2,
                                aes(x = foreperiod,
                                    y = meanRT,
@@ -275,7 +290,7 @@ ggplot2::ggsave("./Analysis/Plots/boxplot_RT_by_condition.png",
                 width = 6.7,
                 height = 5)
 
-# log FP
+# log RT by FP and condition
 ggplot(data = summaryData2,
        aes(x = foreperiod,
            y = meanLogRT,
@@ -318,10 +333,11 @@ ggplot(data = summaryData2 %>%
         axis.title = element_text(size = rel(1.2))) +
   facet_wrap(~condition) +
   scale_color_manual(values = c('blue', 'orange', 'green'))
-ggsave("./Analysis/Plots/SeqEff.jpeg",
-#ggsave("./Analysis/Plots/SeqEff.pdf",
-       width = 6.7,
-       height = 5)
+
+ggsave("./Analysis/Plots/SeqEff_by_condition.tiff",
+       width = 20,
+       height = 11.11,
+       unit = "cm")
 
 # Sequential effects separated by FP n-1
 seqEff_by_oneback <- ggplot(data = summaryData2 %>%
@@ -356,6 +372,12 @@ ggsave("./Analysis/Plots/SeqEff.pdf",
        width = 20,
        height = 8.33,
        units = "cm")
+
+ggsave("./Analysis/Plots/SeqEff.tiff",
+       seqEff_by_oneback,
+       width = 20,
+       height = 11.11,
+       unit = "cm")
 
 # Boxplot
 ggplot(data = summaryData2,
@@ -665,6 +687,12 @@ ggsave("./Analysis/Plots/rt_acc_plots.pdf",
        height = 8.33,#11.94,
        units = "cm")
 
+# ggplot2::ggsave("./Analysis/Plots/rt_acc_plots.tiff",
+#                 rt_acc_plots,
+#                 width = 35,
+#                 height = 23.32,
+#                 units = "cm")
+
 # For poster
 ggplot2::ggsave("G:/My Drive/Post-doc/Eventos/TRF-3/Poster/RT_by_condition.tiff",
                 RT_by_condition + labs(title = "Experiment 1") +
@@ -748,6 +776,22 @@ ggplot(data = summaryData2,
         legend.text = element_text(size = rel(1.2)),
         legend.title = element_text(size = rel(1.2)))
 
+#==================================== 1.2. Tables ================================
+# RT By foreperiod and condition
+meandata <- summaryData2 %>%
+  group_by(condition, foreperiod) %>%
+  summarise(condRT = mean(meanRT),
+            varRT = var(meanRT),
+            sdRT = sd(meanRT))
+meandata  
+
+ # RT By foreperiod
+meandataFP <- summaryData2 %>%
+  group_by(foreperiod) %>%
+  summarise(condRT = mean(meanRT),
+            varRT = var(meanRT),
+            sdRT = sd(meanRT))
+meandataFP
 
 # marginal means for acc
 margAcc <- summaryDataAcc %>%
@@ -1076,3 +1120,213 @@ ggsave("./Analysis/Plots/rt_extr_fps_part.png",
        rt_extr_fps_part,
        width = 6.7,
        height = 5)
+
+rt_by_condition <- ggplot(data = summaryData2 %>% 
+                            group_by(ID, foreperiod, condition) %>% 
+                            summarise(meanCorRT = mean(meanCorRT)),
+                          aes(x = foreperiod,
+                              y = meanCorRT,
+                              color = condition)) +
+  geom_jitter(height = 0, width = 0.15, alpha = 0.5) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 1.4, aes(group = condition)) +
+  stat_summary(fun.data = "mean_se", linewidth = 1.2, width = 0.1, geom = "errorbar") +
+  labs(title = "RT",
+       x = "FP", 
+       y = "Mean RT",
+       color = "Condition") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank()) +
+  scale_color_manual(values = c("orange","blue"))
+ggplot2::ggsave("./Analysis/Plots/RT_by_condition.png",
+                rt_by_condition,
+                width = 8.5,
+                height = 5.7)
+
+
+ggplot(data = summaryData2 %>%
+         group_by(ID, foreperiod, condition, oneBackFP) %>%
+         summarise(meanCorRT = mean(meanCorRT)),
+       aes(x = foreperiod,
+           y = meanCorRT,
+           color=oneBackFP)) +
+  geom_jitter(height = 0, width = 0.30, alpha = 0.5) +
+  stat_summary(fun = "mean", geom = "point", size = 1.5) +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = oneBackFP)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.1, geom = "errorbar") +
+  labs(title = "Sequential effects by condition",
+       x = "Foreperiod",
+       y = "Mean RT",
+       color = "FP n-1") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.2))) +
+  facet_wrap(~condition) +
+  scale_color_manual(values = c('blue', 'orange', 'green'))
+
+#=================================== 4. Learning =============================================
+#============================ 4.1. Effects across blocks ==============================
+# Foreperiod, condition and block
+blocklm <- lm(meanRT ~ foreperiod * counterbalance * block,
+              data = summaryData2)
+
+anova(blocklm)
+
+
+ggplot(data = goData2,
+       aes(x = trial,
+           y = RT,
+           color = condition)) +
+  #geom_point() +
+  geom_line(aes(group = condition)) +
+  geom_smooth(method = 'lm') +
+  facet_wrap(~ID) +
+  scale_color_manual(values = c('orange', 'blue'))
+
+#========================== 5.2. Split anovas by counterbalancing order ===================
+
+fpAnova_ae <- aov_ez(id = "ID",
+                     dv = "meanRT",
+                     data = summaryData2[summaryData2$counterbalance=='action-external',],
+                     within = c("foreperiod", "condition"))
+
+fpAnova_ea <- aov_ez(id = "ID",
+                     dv = "meanRT",
+                     data = summaryData2[summaryData2$counterbalance=='external-action',],
+                     within = c("foreperiod", "condition"))
+
+# Examine first trials for possible stabilization of RT
+firstBlockData <- goData2 %>%
+  filter(block == '0', trial_bl %in% 1:80)
+
+
+ggplot(data = firstBlockData,
+       aes(x = trial_bl,
+           y = RT,
+           color = condition)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.5, aes(group = condition)) +
+  geom_smooth() +
+  scale_color_manual(values = c('orange', 'blue'))
+
+# Examine learning across all trials
+ggplot(data = goData2,
+       aes(x = trial,
+           y = RT,
+           color = condition)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.5, aes(group = condition)) +
+  geom_smooth() +
+  scale_color_manual(values = c('orange', 'blue')) +
+  facet_wrap(~counterbalance)
+
+# Bin trials across all blocks
+data2 <- data2 %>%
+  group_by(ID) %>%
+  mutate(binTrial = ntile(trial, n =4)) %>%
+  ungroup()
+
+ggplot(data = data2,
+       aes(x = binTrial,
+           y = RT)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.5, aes(group = 1)) +
+  scale_color_manual(values = c('orange', 'blue'))
+
+
+# Binned trials by condition
+data2 <- data2 %>%
+  group_by(ID, condition) %>%
+  mutate(binTrial = ntile(trial, n =2)) %>%
+  mutate(binTrial = as.factor(binTrial)) %>%
+  ungroup()
+
+
+ggplot(data = data2 %>%
+         group_by(ID, condition, counterbalance, binTrial) %>%
+         summarise(meanRT = mean(RT)),
+       aes(x = binTrial,
+           y = meanRT,
+           color = condition)) +
+  geom_jitter(height = 0, width = 0.15, alpha = 0.5) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.5, aes(group = condition)) +
+  scale_color_manual(values = c('orange', 'blue')) +
+  facet_wrap(~ counterbalance)
+
+firstBlockData <- firstBlockData %>%
+  group_by(ID) %>%
+  mutate(binTrial = ntile(trial, n = 8)) %>%
+  ungroup()
+
+ggplot(data = firstBlockData,
+       aes(x = binTrial,
+           y = RT,
+           color = condition)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.5, aes(group = condition)) +
+  scale_color_manual(values = c('orange', 'blue'))
+
+
+# Regression by block
+blocklm <- lm(meanRT ~ foreperiod * condition * block,
+              data = summaryData2)
+
+anova(blocklm)
+Anova(blocklm)
+
+ggplot(data = data2,
+       aes(x = trial,
+           y = RT,
+           color = condition)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 1, aes(group = condition)) +
+  #stat_summary(fun.data = "mean_cl_boot", geom = "errorbar", width = 0.2) +
+  scale_color_manual(values = c('orange', 'blue')) +
+  facet_wrap(~ foreperiod, nrow = 2, ncol = 1)
+
+# 2.4.2. Split participants' trias in 3 bins and compare average RTs
+dataBin <- data2 %>%
+  group_by(ID, condition) %>%
+  mutate(trialBin)
+
+
+# 2.4.3. Examine fp length order by condition
+# By FP order
+ggplot(data = summaryData2,
+       aes(x = foreperiod,
+           y = meanRT,
+           color = condition)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", aes(group = condition)) +
+  stat_summary(fun.data='mean_cl_boot',width=0.2,geom='errorbar')+
+  theme(plot.title=element_text(size = rel(2), hjust = 0.5),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.background=element_blank(),
+        axis.text = element_text(size = rel(1.5)),
+        axis.title = element_text(size = rel(1.5)))+
+  scale_color_manual(values=c('orange','blue')) +
+  facet_grid(counterbalance ~ fpOrder)
+
+# By FP order and block
+ggplot(data = summaryData2,
+       aes(x = foreperiod,
+           y = meanRT,
+           color = condition)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", aes(group = condition)) +
+  stat_summary(fun.data='mean_cl_boot',width=0.2,geom='errorbar')+
+  theme(plot.title=element_text(size = rel(2), hjust = 0.5),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.background=element_blank(),
+        axis.text = element_text(size = rel(1.5)),
+        axis.title = element_text(size = rel(1.5)))+
+  scale_color_manual(values=c('orange','blue')) +
+  facet_grid(counterbalance ~ fpOrder * block)
