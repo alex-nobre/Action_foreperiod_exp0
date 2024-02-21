@@ -1,8 +1,5 @@
 
 
-#================================================================================#
-#================================================================================#
-
 # Load necessary packages
 
 # Read and process data
@@ -268,6 +265,44 @@ ggplot2::ggsave("./Analysis/Plots/RT_by_condition.pdf",
                 width = 15,
                 height = 10)
 
+# Em portugues
+RT_by_condition_port <- ggplot(data = summaryData2 %>% 
+                            group_by(ID, foreperiod, condition) %>% 
+                            summarise(meanRT = mean(meanRT)),
+                          aes(x = foreperiod,
+                              y = meanRT,
+                              color = condition)) +
+  geom_jitter(height = 0, width = 0.15, size = 3.1, alpha = 0.5) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 3.9, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 3.7, width = 0.1, geom = "errorbar") + 
+  labs(title = "Experimento 1",
+       x = "FP (s)",
+       y = "TR médio (s)",
+       color = "Condição") +
+  theme(plot.title = element_text(size = rel(2.0), hjust = 0.5, margin = margin(t = 0, r = 0, b = 25, l = 0)),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.title = element_text(size = rel(2.0)),
+        axis.title.x = element_text(margin = margin(t = 20, r = 0, b = 2.75, l = 0)),
+        axis.title.y = element_text(margin = margin(t = 0, r = 20, b = 0, l = 0)),
+        axis.text = element_text(size = rel(1.7)),
+        legend.title = element_text(size = rel(1.8)),
+        legend.text = element_text(size = rel(1.6)),
+        legend.key = element_blank(),
+        legend.box.spacing = unit(0, "pt"),
+        legend.margin = margin(5.5, 5.5, 5.5, 1),
+        legend.position = "none") +
+  scale_color_manual(values = c("orange", "blue"), labels = c("Externa", "Ação"))
+
+# Save
+ggplot2::ggsave("./Analysis/Plots/RT_by_condition_port.tiff",
+                RT_by_condition_port,
+                width = 25,
+                height = 16.66,
+                units = "cm")
+
 
 # Boxplot of RT by FP and condition
 boxplot_fp_condition <- ggplot(data = summaryData2,
@@ -364,7 +399,11 @@ seqEff_by_oneback <- ggplot(data = summaryData2 %>%
         legend.text = element_text(size = rel(0.8)),
         legend.key = element_blank(),
         legend.box.spacing = unit(0, "pt")) +
-  facet_wrap(~oneBackFP) +
+  facet_wrap(~oneBackFP,
+             labeller = as_labeller(c(`0.6` = "FP[n-1] == 0.6",
+                                      `1.2` = "FP[n-1] == 1.2",
+                                      `1.8` = "FP[n-1] == 1.8"),
+                                    default = label_parsed)) +
   scale_color_manual(values = c("orange", "blue"), labels = c("External", "Action"))
 
 ggsave("./Analysis/Plots/SeqEff.pdf",
@@ -378,6 +417,50 @@ ggsave("./Analysis/Plots/SeqEff.tiff",
        width = 20,
        height = 11.11,
        unit = "cm")
+
+# Sequential effects separated by FP n-1 em portugues
+seqEff_by_oneback_port <- ggplot(data = summaryData2 %>%
+                              group_by(ID, foreperiod, condition, oneBackFP) %>%
+                              summarise(meanRT = mean(meanRT)),
+                            aes(x = foreperiod,
+                                y = meanRT,
+                                color=condition)) +
+  geom_jitter(height = 0, width = 0.30, size = 3.5, alpha = 0.5) +
+  stat_summary(fun = "mean", geom = "point", size = 1.5) +
+  stat_summary(fun = "mean", geom = "line", linewidth = 3.9, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 3.7, width = 0.1, geom = "errorbar") + 
+  labs(title = "Experimento 1: efeitos sequenciais",
+       x = expression("FP"[n]*" (s)"),
+       y = "TR médio (s)",
+       color = "Condição") +
+  theme(plot.title = element_text(size = rel(2.0), hjust = 0.5, margin = margin(t = 0, r = 0, b = 25, l = 0)),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_text(size = rel(2.0)),
+        axis.title = element_text(size = rel(2.0)),
+        axis.title.x = element_text(margin = margin(t = 20, r = 0, b = 2.75, l = 0)),
+        axis.title.y = element_text(margin = margin(t = 0, r = 20, b = 0, l = 0)),
+        axis.text = element_text(size = rel(1.7)),
+        legend.title = element_text(size = rel(1.8)),
+        legend.text = element_text(size = rel(1.6)),
+        legend.key = element_blank(),
+        legend.box.spacing = unit(0, "pt"),
+        legend.margin = margin(5.5, 5.5, 5.5, 1)) +
+  facet_wrap(~oneBackFP,
+             labeller = as_labeller(c(`0.6` = "FP[n-1] == 0.6",
+                                      `1.2` = "FP[n-1] == 1.2",
+                                      `1.8` = "FP[n-1] == 1.8"),
+                                    default = label_parsed)) +
+  scale_color_manual(values = c("orange", "blue"), labels = c("Externa", "Ação"))
+
+# Save
+ggplot2::ggsave("./Analysis/Plots/seqEffs_exp1_port.tiff",
+                seqEff_by_oneback_port,
+                width = 35,
+                height = 23.32,
+                units = "cm")
 
 # Boxplot
 ggplot(data = summaryData2,
@@ -687,11 +770,6 @@ ggsave("./Analysis/Plots/rt_acc_plots.pdf",
        height = 8.33,#11.94,
        units = "cm")
 
-# ggplot2::ggsave("./Analysis/Plots/rt_acc_plots.tiff",
-#                 rt_acc_plots,
-#                 width = 35,
-#                 height = 23.32,
-#                 units = "cm")
 
 # For poster
 ggplot2::ggsave("G:/My Drive/Post-doc/Eventos/TRF-3/Poster/RT_by_condition.tiff",
@@ -731,6 +809,53 @@ ggsave("./Analysis/Plots/oneBackTrialType.png",
        width = 7.5,
        height = 5)
 
+
+# Sequential effects separated by FP n-1 and n-1 trial type
+seqEff_by_oneback_trialtype <- ggplot(data = summaryData2 %>%
+         group_by(ID, foreperiod, oneBackFP, oneBacktrialType, condition) %>%
+         summarise(meanRT = mean(meanRT)),
+       aes(x = foreperiod,
+           y = meanRT,
+           color=condition)) +
+  geom_jitter(height = 0, width = 0.30, alpha = 0.5) +
+  stat_summary(fun = "mean", geom = "point", size = 1.5) +
+  stat_summary(fun = "mean", geom = "line", linewidth = 1.4, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.2, width = 0.1, geom = "errorbar") + 
+  labs(x = "FP (s)",
+       y = "Mean RT (s)",
+       color = "Condition") +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        strip.background = element_blank(),
+        axis.text = element_text(size = rel(0.9)),
+        axis.title = element_text(size = rel(1.1)),
+        strip.text = element_text(size = rel(1.1)),
+        legend.title = element_text(size = rel(0.9)),
+        legend.text = element_text(size = rel(0.8)),
+        legend.key = element_blank(),
+        legend.box.spacing = unit(0, "pt")) +
+  facet_grid(oneBacktrialType~oneBackFP,
+             labeller = labeller(oneBackFP = as_labeller(c(`0.6` = "FP[n-1] == 0.6",
+                                               `1.2` = "FP[n-1] == 1.2",
+                                               `1.8` = "FP[n-1] == 1.8"),
+                                             default = label_parsed),
+                                 oneBacktrialType = c("go" = "Go", "no-go" = "No-go"))) +
+  scale_color_manual(values = c('orange', 'blue'), labels = c("External", "Action"))
+
+ggsave("./Analysis/Plots/SeqEff_oneBackTrialType.pdf",
+       seqEff_by_oneback_trialtype,
+       width = 20,
+       height = 14.33,
+       units = "cm")
+
+ggsave("./Analysis/Plots/SeqEff_oneBackTrialType.tiff",
+       seqEff_by_oneback_trialtype,
+       width = 20,
+       height = 17.11,
+       unit = "cm")
+
+# Sequential effects separated by condition and n-1 trial type
 ggplot(data = summaryData2,
        aes(x = foreperiod,
            y = meanRT,
@@ -756,25 +881,34 @@ ggsave("./Analysis/Plots/RT_condition_trialtype.pdf",
        width = 6.7,
        height = 5)
 
-ggplot(data = summaryData2,
-       aes(x = foreperiod,
-           y = meanRT,
-           color = oneBackFP)) +
-  stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = oneBackFP)) +
-  stat_summary(fun.data = "mean_cl_boot", geom = "errorbar", width = 0.1) +
-  facet_wrap(oneBacktrialType ~ condition) +
-  scale_color_manual(values = c("blue", "orange", "green")) +
-  labs(x = "Foreperiod",
-       y = "Mean RT",
-       color = "FP n-1") +
-  theme(panel.grid.major = element_blank(),
+
+# SD
+sd_by_condition <- ggplot(data = goData2 %>% 
+                            group_by(ID, foreperiod, condition) %>% 
+                            summarise(sdRT = sd(RT)),
+                          aes(x = foreperiod,
+                              y = sdRT,
+                              color = condition)) +
+  geom_jitter(height = 0, width = 0.15, alpha = 0.5) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 1.4, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.2, width = 0.1, geom = "errorbar") + 
+  labs(title = "RT",
+       x = "FP (s)",
+       y = "SD RT (s)",
+       color = "Condition") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(),
         axis.text = element_text(size = rel(1.2)),
         axis.title = element_text(size = rel(1.2)),
-        legend.text = element_text(size = rel(1.2)),
-        legend.title = element_text(size = rel(1.2)))
+        legend.key = element_blank()) +
+  scale_color_manual(values = c("orange", "blue"), labels = c("External", "Action"))
+ggplot2::ggsave("./Analysis/Plots/RT_by_condition.pdf",
+                sd_by_condition,
+                width = 15,
+                height = 10)
 
 #==================================== 1.2. Tables ================================
 # RT By foreperiod and condition
@@ -1225,6 +1359,20 @@ ggplot(data = goData2,
   scale_color_manual(values = c('orange', 'blue')) +
   facet_wrap(~counterbalance)
 
+# Examine learning across blocks
+ggplot(data = goData2,
+       aes(x = trial_bl,
+           y = RT,
+           color = condition)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 0.5, aes(group = condition)) +
+  geom_smooth() +
+  scale_color_manual(values = c('orange', 'blue')) +
+  facet_grid(counterbalance ~ block)
+ggsave("./Analysis/Plots/learning_across_blocks.jpg",
+       width = 13.4,
+       height = 10)
+
 # Bin trials across all blocks
 data2 <- data2 %>%
   group_by(ID) %>%
@@ -1329,4 +1477,7 @@ ggplot(data = summaryData2,
         axis.text = element_text(size = rel(1.5)),
         axis.title = element_text(size = rel(1.5)))+
   scale_color_manual(values=c('orange','blue')) +
-  facet_grid(counterbalance ~ fpOrder * block)
+  facet_grid(counterbalance ~ block)
+ggsave("./Analysis/Plots/learning_rt_by_fp_cond.jpg",
+       width = 13.4,
+       height = 10)

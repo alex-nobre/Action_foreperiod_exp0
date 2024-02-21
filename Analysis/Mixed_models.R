@@ -107,33 +107,12 @@ contrastCodes <- cbind(c(3/4, -1/4, -1/4, -1/4),
 
 contrasts(dataAll$oneBackFPDiff) <- contrastCodes
 
-#=========================== 1.1. Find maximal converging structure =============================
-# We use buildmer for this
+
+
+#============================== 1.1. Choose dependent variable ================================
 
 # To choose the data transformation that leads to the optimal random effects structure, we fit models including only 
 # random intercepts and compare R2 and residuals
-
-fplmm <- buildmer(formula = RT ~ scaledNumForeperiod*condition*oneBackFP + 
-                    (1|ID),
-                  data = goData2,
-                  buildmerControl = list(crit = "LRT",
-                                         family = gaussian(link = "identity"),
-                                         calc.anova = TRUE))
-formula(fplmm)
-
-fplmm <- mixed(formula = RT ~ scaledNumForeperiod*condition*oneBackFP + 
-                 (1|ID),
-               data = goData2,
-               control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
-               progress = TRUE,
-               expand_re = TRUE,
-               method =  'S',
-               return = 'merMod',
-               REML=TRUE)
-
-summary(fplmm)
-
-#============================== 1.2. Choose dependent variable ================================
 
 # Fit models with RT, inverse RT, and logRT without trimming
 fplmm1 <- mixed(formula = RT ~ scaledNumForeperiod*condition*oneBackFP + 
@@ -283,6 +262,31 @@ R2table <- fitstats(fplmm1, 'RT') %>%
   plyr::join(., fitstats(trimlogfplmm1, 'trim log(RT)'), by='stat') %>%
   kable(digits=4)
 
+#==========================================================================================#
+#=========================== 2. Find maximal converging structure ==========================
+#==========================================================================================#
+
+# We use buildmer for this
+
+fplmm <- buildmer(formula = RT ~ scaledNumForeperiod*condition*oneBackFP + 
+                    (1|ID),
+                  data = goData2,
+                  buildmerControl = list(crit = "LRT",
+                                         family = gaussian(link = "identity"),
+                                         calc.anova = TRUE))
+formula(fplmm)
+
+fplmm <- mixed(formula = RT ~ scaledNumForeperiod*condition*oneBackFP + 
+                 (1|ID),
+               data = goData2,
+               control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+               progress = TRUE,
+               expand_re = TRUE,
+               method =  'S',
+               return = 'merMod',
+               REML=TRUE)
+
+summary(fplmm)
 
 #==========================================================================================#
 #==================================== 3. Model assessment =================================
