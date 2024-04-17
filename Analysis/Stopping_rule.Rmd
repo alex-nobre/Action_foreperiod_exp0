@@ -1,0 +1,230 @@
+---
+title: "Stopping_rule_test"
+author: "Alexandre Nobre"
+date: "2024-03-15"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Breve sumário da avaliação da evidência para justificar o N do experimento 1. 
+
+```{r packages and data, echo=FALSE, message=FALSE}
+# Read and process data
+library(tidyverse)
+library(magrittr)
+library(data.table)
+
+# Plotting
+library(ggplot2)
+library(lattice)
+library(gtable)
+library(gridExtra)
+library(gridGraphics)
+library(ggdist)
+library(ggpubr)
+
+# Descriptives
+library(Hmisc)
+
+# Linear models
+library(afex)
+library(car)
+library(codingMatrices)
+library(broom)
+library(modelr)
+
+# Mixed models
+library(emmeans)
+library(lme4)
+library(performance)
+library(ggsignif)
+library(rtdists)
+
+# Bayesian analyses
+library(bayestestR)
+library(BayesFactor)
+library(brms)
+
+
+# Save defaults
+graphical_defaults <- par()
+options_defaults <- options() 
+
+
+# Prepare data 
+source('./Analysis/Prepare_data_4.R')
+```
+
+Abaixo, fazemos duas comparações para obter Bayes Factors para a diferença no efeito de FP n entre condições.
+
+```{r preparar dados, echo=FALSE}
+# Variables used as predictors: numForeperiod and numOneBackFP
+# Dependent variable: logRT
+# Variables nested by condition and ID
+
+buildmodel <- function(data) {
+  lm(logRT ~ numForeperiod*numOneBackFP,
+     data = data)
+}
+
+nested_data <- goData2 %>%
+  select(ID, condition, numForeperiod, numOneBackFP, logRT) %>%
+  group_by(ID, condition) %>%
+  nest()
+
+fitted_data <- nested_data %>%
+  mutate(fit = map(data, buildmodel),
+         params = map(fit, tidy)) %>%
+  ungroup() %>%
+  unnest(c(params)) %>%
+  select(ID, condition, term, estimate) %>%
+  pivot_wider(names_from = term,
+              values_from = estimate)
+
+```
+
+
+A primeira comparação utiliza coeficientes para o efeito de FPn (considerado como uma variável numérica, "numForeperiod") sobre o log do TR obtidos para cada participante e cada condição separadamente. Esses coeficientes são depois submetidos a um teste-t bayesiano pareado comparando os coeficientes para cada condição, e extraindo o BF para a comparação da hipótese alternativa com a hipótese nula.
+
+
+```{r Sequential Bayes Factores, echo=FALSE}
+external_fits <- fitted_data[fitted_data$condition=='external',]
+action_fits <- fitted_data[fitted_data$condition=='action',]
+
+srange <- 10:nrow(external_fits)
+
+fp_bfs <- sapply(srange, function(range) {
+  extractBF(ttestBF(x = external_fits$numForeperiod[1:range],
+                    y = action_fits$numForeperiod[1:range],
+                    paired=TRUE),
+            onlybf = TRUE)
+})
+
+plot(srange, fp_bfs)
+lines(srange, fp_bfs)
+
+onebackfp_bfs <- sapply(srange, function(range) {
+  extractBF(ttestBF(x = external_fits$numOneBackFP[1:range],
+                    y = action_fits$numOneBackFP[1:range],
+                    paired=TRUE),
+            onlybf = TRUE)
+})
+
+plot(srange, onebackfp_bfs)
+lines(srange, onebackfp_bfs)
+
+interact_bfs <- sapply(srange, function(range) {
+  extractBF(ttestBF(x = external_fits$`numForeperiod:numOneBackFP`[1:range],
+                    y = action_fits$`numForeperiod:numOneBackFP`[1:range],
+                    paired=TRUE),
+            onlybf = TRUE)
+})
+
+plot(srange, interact_bfs)
+lines(srange, interact_bfs)
+
+```
+
+A segunda comparação é utilizando modelos mistos, comparando um modelo incluindo como fator fixo e fator aleatório FPn (como variável numérica, "numForeperiod") a outro modelo incluindo FPn e condição como fatores fixos e fatores aleatórios. O BF é obtido transformando-se a razão entre os BICs do modelo incluindo condição (como numerador) e o modelo sem condição (como denominador) em BF.
+
+
+
+```{r Mixed models BF comparison, echo=FALSE, message=FALSE}
+# Condition x fp n
+with_condition <- mixed(formula = logRT ~ 1 + condition + numForeperiod + condition:numForeperiod + 
+                          (1 + condition + numForeperiod | ID),
+                        data = goData2,
+                        control = lmerControl(optimizer = c('bobyqa'), optCtrl = list(maxfun=2e5), calc.derivs = FALSE),
+                        progress = TRUE,
+                        expand_re = TRUE,
+                        method = 'S',
+                        REML = TRUE,
+                        return = 'merMod')
+
+isSingular(with_condition)
+
+no_condition <- mixed(formula = logRT ~ 1 + numForeperiod +
+                        (1 + numForeperiod | ID),
+                      data = goData2,
+                      control = lmerControl(optimizer = c('bobyqa'), optCtrl = list(maxfun=2e5), calc.derivs = FALSE),
+                      progress = TRUE,
+                      expand_re = TRUE,
+                      method = 'S',
+                      REML = TRUE,
+                      return = 'merMod')
+
+isSingular(no_condition)
+
+bic_to_bf(c(BIC(no_condition),
+            BIC(with_condition)),
+          denominator = c(BIC(no_condition)))
+
+# Condition x fp n x fp n-1
+
+with_onebackfp <- mixed(formula = logRT ~ 1 + condition + numForeperiod + condition:numForeperiod + 
+                          oneBackFP + numForeperiod:oneBackFP + condition:oneBackFP + 
+                          (1 + condition + numForeperiod | ID),
+                        data = goData2,
+                        control = lmerControl(optimizer = c('bobyqa'), optCtrl = list(maxfun=2e5), calc.derivs = FALSE),
+                        progress = TRUE,
+                        expand_re = TRUE,
+                        method = 'S',
+                        REML = TRUE,
+                        return = 'merMod')
+
+isSingular(with_onebackfp)
+
+no_onebackfp <- mixed(formula = logRT ~ 1 + condition + numForeperiod + condition:numForeperiod +
+                        (1 + condition + numForeperiod | ID),
+                      data = goData2,
+                      control = lmerControl(optimizer = c('bobyqa'), optCtrl = list(maxfun=2e5), calc.derivs = FALSE),
+                      progress = TRUE,
+                      expand_re = TRUE,
+                      method = 'S',
+                      REML = TRUE,
+                      return = 'merMod')
+
+
+isSingular(no_onebackfp)
+
+BIC(no_onebackfp, with_onebackfp)
+
+bic_to_bf(c(BIC(no_onebackfp),
+            BIC(with_onebackfp)),
+          denominator = c(BIC(no_onebackfp)))
+
+
+# Condition x fp n x fp n-1 (with and without condition)
+with_condition <- mixed(formula = logRT ~ 1 + condition + numForeperiod + condition:numForeperiod + 
+                          oneBackFP + numForeperiod:oneBackFP + condition:oneBackFP + condition:numForeperiod:oneBackFP +
+                          (1 + condition + numForeperiod | ID),
+                        data = goData2,
+                        control = lmerControl(optimizer = c('bobyqa'), optCtrl = list(maxfun=2e5), calc.derivs = FALSE),
+                        progress = TRUE,
+                        expand_re = TRUE,
+                        method = 'S',
+                        REML = TRUE,
+                        return = 'merMod')
+
+isSingular(with_condition)
+
+no_condition <- mixed(formula = logRT ~ 1 + numForeperiod + oneBackFP + numForeperiod:oneBackFP +
+                        (1 + numForeperiod | ID),
+                      data = goData2,
+                      control = lmerControl(optimizer = c('bobyqa'), optCtrl = list(maxfun=2e5), calc.derivs = FALSE),
+                      progress = TRUE,
+                      expand_re = TRUE,
+                      method = 'S',
+                      REML = TRUE,
+                      return = 'merMod')
+
+isSingular(no_condition)
+
+bic_to_bf(c(BIC(no_condition),
+            BIC(with_condition)),
+          denominator = c(BIC(no_condition)))
+```
+

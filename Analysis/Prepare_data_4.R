@@ -329,7 +329,7 @@ summaryData3 <- goData3 %>%
 
 # Including all trials for accuracy analysis
 summaryDataAcc <- dataAcc %>%
-  group_by(ID,foreperiod,condition,
+  group_by(ID,foreperiod,condition, trialType,
            oneBackFP, oneBacktrialType, oneBackFPGo) %>%
   summarise(meanRT = mean(RT),
             meanAcc = mean(Acc),

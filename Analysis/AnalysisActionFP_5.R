@@ -68,7 +68,7 @@ n_trials_comp <- left_join(n_notrim, n_trim) %>%
   summarise(meanT = mean(percent_trimmed), sdT = sd(percent_trimmed))
 
 # RTs across blocks (no condition)
-ggplot(data=summaryData,
+ggplot(data=summaryData2,
        aes(x=block,
            y=meanRT))+
   stat_summary(fun='mean',geom='point')+
@@ -78,7 +78,8 @@ ggplot(data=summaryData,
         panel.grid.minor=element_blank(),
         panel.background=element_blank())
 
-ggplot(data=summaryData,
+# RTs across blocks (by condition)
+ggplot(data=summaryData2,
        aes(x=block,
            y=meanRT,
            color=condition))+
@@ -106,6 +107,7 @@ ggplot(data=summaryData2,
         axis.title = element_text(size = rel(1.5)))+
   scale_color_manual(values=c('blue','orange')) +
   labs(title='RT by block split by counterbalancing order')
+  
 
 # Check for influence of external fixation duration
 cor(goData2 %>% filter(condition == "external") %>% pull(RT),
@@ -156,6 +158,13 @@ ggsave("./Analysis/Plots/actiontrigpress.png",
        width = 13.4,
        height = 10)
 
+# Correlations between RT and accuracy
+ggplot(data=summaryDataAccGo,
+       aes(x=meanRT,
+           y=meanAcc)) +
+  geom_point()
+
+#======================== Influence of delays between actions and WS onset ============
 # Histograms of delays between action and WS
 ggplot(data = goData2) +
   geom_histogram(aes(x = round(delay,3)))
@@ -1005,9 +1014,12 @@ logFPAnova <- aov_ez(id = "ID",
 
 logFPAnova
 
-#======================= 2.2. Sequential effects ============================
-#========== 2.2.1. RT ============
+check_sphericity(logFPAnova)
 
+
+#======================= 2.2. Sequential effects ============================
+
+#========== 2.2.1. RT ============
 # 2.2.1. Anova for FP n-1
 seqEffAnova <- aov_ez(id = "ID",
                   dv = "meanRT",
@@ -1015,12 +1027,6 @@ seqEffAnova <- aov_ez(id = "ID",
                   within = c("foreperiod", "condition", "oneBackFP"),
                   anova_table = list(es = "pes"))
 
-# Without no-go trials
-seqEffAnova <- aov_ez(id = "ID",
-                      dv = "meanRT",
-                      data = summaryData3,
-                      within = c("foreperiod", "condition", "oneBackFP"),
-                      anova_table = list(es = "pes"))
 
 check_sphericity(seqEffAnova)
 
@@ -1052,21 +1058,74 @@ oneBackfpEmmeansConstrasts <- contrast(oneBackEmmeans[[1]],
                                         interaction = c("consec"),
                                         adjust = "holm")
 
+#========== 2.2.2. 1/RT ============
+seqEffInvAnova <- aov_ez(id = "ID",
+                         dv = "meanInvRT",
+                         data = summaryData2,
+                         within = c("foreperiod", "condition", "oneBackFP"))
 
+
+nice(seqEffInvAnova,
+     correction='none')
+
+
+#========== 2.2.3. logRT ============
+seqEffLogAnova <- aov_ez(id = "ID",
+                      dv = "meanLogRT",
+                      data = summaryData2,
+                      within = c("foreperiod", "condition", "oneBackFP"),
+                      anova_table = list(es = "pes"))
+
+check_sphericity(seqEffLogAnova)
+
+is_norm <- check_normality(seqEffLogAnova)
+
+nice(seqEffLogAnova)
+
+# Pairwise comparisons for conditions wihtin levels of foreperiod
+conditionEmmeans <- emmeans(seqEffLogAnova,
+                            pairwise ~ condition|foreperiod,
+                            adjust = "holm")
+
+# fpEmmeansContrasts <- contrast(fpEmmeans[[1]],
+#                                interaction=c('poly'),
+#                                adjust='bonferroni')
+
+
+conditionEmmeansContrasts <- contrast(conditionEmmeans[[1]],
+                                      interaction = c("consec"),
+                                      adjust = "holm")
+
+
+# Pairwise comparisons for levels of oneBackFP within foreperiod
+oneBackEmmeans <- emmeans(seqEffLogAnova,
+                          pairwise ~ oneBackFP|foreperiod,
+                          adjust = "holm")
+
+oneBackfpEmmeansConstrasts <- contrast(oneBackEmmeans[[1]],
+                                       interaction = c("consec"),
+                                       adjust = "holm")
+
+
+
+
+
+
+# Without no-go n-1 trials
+
+# RT
+seqEffAnova <- aov_ez(id = "ID",
+                      dv = "meanRT",
+                      data = summaryData3,
+                      within = c("foreperiod", "condition", "oneBackFP"),
+                      anova_table = list(es = "pes"))
 # Anova for FP n-2
-seqEfffp2Anova <- aov_ez(id = "ID",
+seqEff2Anova <- aov_ez(id = "ID",
                       dv = "meanRT",
                       data = summaryData2,
                       within = c("foreperiod", "condition", "twoBackFP"))
 
-seqEffffp2Anova <- aov_ez(id = "ID",
-                      dv = "meanInvRT",
-                      data = summaryData2,
-                      within = c("foreperiod", "condition", "oneBackFP"))
 
-
-nice(seqEfffp2Anova,
-     correction='none')
 
 #=================== 2.2.2. Accuracy ==========================
 # Set constrasts for variables used in ANOVAs
@@ -1304,6 +1363,46 @@ ggplot(data = summaryData2 %>%
   scale_color_manual(values = c('blue', 'orange', 'green'))
 
 #=================================== 4. Learning =============================================
+
+# RTs by block (no condition)
+ggplot(data=summaryData2,
+       aes(x=foreperiod,
+           y=meanRT))+
+  stat_summary(fun='mean',geom='point') +
+  stat_summary(fun='mean',geom='line',size=1,aes(group=1)) +
+  stat_summary(fun.data='mean_cl_boot',width=0.2,geom='errorbar') +
+  facet_wrap(~block,
+             labeller = labeller(block = c(`0` = "Block 1",
+                                              `1` = "Block 2",
+                                              `2` = "Block 3",
+                                              `3` = "Block 4"))) +
+  theme(panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.background=element_blank())
+
+# RTs by block (only external)
+external_by_block <- ggplot(data=summaryData2 %>%
+                              filter(condition == "external"),
+                            aes(x=foreperiod,
+                                y=meanRT,
+                                color = "orange"))+
+  stat_summary(fun='mean',geom='point') +
+  stat_summary(fun='mean',geom='line',size=1,aes(group=1)) +
+  stat_summary(fun.data='mean_cl_boot',width=0.2,geom='errorbar') +
+  facet_wrap(~block,
+             labeller = labeller(block = c(`0` = "Block 1",
+                                           `1` = "Block 2",
+                                           `2` = "Block 3",
+                                           `3` = "Block 4"))) +
+  theme(panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.background=element_blank())
+
+ggplot2::ggsave("./Analysis/Plots/external_by_block.pdf",
+                external_by_block,
+                width = 15,
+                height = 10)
+
 #============================ 4.1. Effects across blocks ==============================
 # Foreperiod, condition and block
 blocklm <- lm(meanRT ~ foreperiod * counterbalance * block,
