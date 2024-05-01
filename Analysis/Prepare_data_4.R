@@ -154,6 +154,12 @@ dataAccNoGo$scaledNumForeperiod <-  scale(dataAccNoGo$numForeperiod, scale = FAL
 dataAccNoGo$squaredScaledNumForeperiod <- (dataAccNoGo$scaledNumForeperiod)^2
 dataAccNoGo$scaledNumOneBackFP <- scale(dataAccNoGo$numOneBackFP, scale = FALSE)[,1]
 
+# Create exponential of -foreperiod to account for non-linearity
+goData$expFP <- exp(-goData$numForeperiod)
+dataAcc$expFP <- exp(-dataAcc$numForeperiod)
+dataAccGo$expFP <- exp(-dataAccGo$numForeperiod)
+dataAccNoGo$expFP <- exp(-dataAccNoGo$numForeperiod)
+
 # Factor version of accuracy/error rate
 dataAcc$acc_result <- as.factor(dataAcc$Acc)
 dataAccGo$acc_result <- as.factor(dataAccGo$Acc)
@@ -176,6 +182,7 @@ goData$squaredNumOneBackFP <- (goData$numOneBackFP)^2
 goData$scaledNumForeperiod <-  scale(goData$numForeperiod, scale = FALSE)[,1]
 goData$squaredScaledNumForeperiod <- (goData$scaledNumForeperiod)^2
 goData$scaledNumOneBackFP <- scale(goData$numOneBackFP, scale = FALSE)[,1]
+
 
 # Transform RT to reduce skew
 goData$logRT <- ifelse(!is.na(goData$RT), log10(goData$RT), NA) # log-transform
@@ -224,9 +231,9 @@ goData <- goData %>%
   #filter(abs(logRTzscore) < 3) %>%
   ungroup()
 
-###############################################################
+#=============================================================#
 # Add delay data
-###############################################################
+#=============================================================#
 delayData <- read_csv("./Analysis/delayDataAll.csv") %>%
   mutate(across(c(ID, condition), as_factor)) %>%
   select(-condition)
@@ -250,11 +257,11 @@ dataAccGo <- dataAccGo %>%
   mutate(corRT = RT - delay)
 dataAccNoGo <- dataAccNoGo %>%
   mutate(corRT = RT - delay)
-################################################################
+#=============================================================#
 
 # Average data
 summaryData <- goData %>%
-  group_by(ID,foreperiod,logFP,condition,
+  group_by(ID,foreperiod,logFP,expFP,condition,
            oneBackFP,twoBackFP,oneBackFPDiff,
            oneBacktrialType, oneBackFPGo,
            block,counterbalance) %>%
@@ -279,7 +286,7 @@ summaryData <- goData %>%
          squaredScaledNumOneBackFPDiff = scaledNumOneBackFPDiff^2)
 
 summaryData2 <- goData2 %>%
-  group_by(ID,foreperiod,logFP,condition,
+  group_by(ID,foreperiod,logFP,expFP,condition,
            oneBackFP,twoBackFP,oneBackFPDiff,
            oneBacktrialType, oneBackFPGo,
            block,counterbalance) %>%
@@ -304,7 +311,7 @@ summaryData2 <- goData2 %>%
          squaredScaledNumOneBackFPDiff = scaledNumOneBackFPDiff^2)
 
 summaryData3 <- goData3 %>%
-  group_by(ID,foreperiod,logFP,condition,
+  group_by(ID,foreperiod,logFP,expFP,condition,
            oneBackFP,twoBackFP,oneBackFPDiff,
            block,counterbalance) %>%
   summarise(meanRT = mean(RT),
@@ -329,7 +336,7 @@ summaryData3 <- goData3 %>%
 
 # Including all trials for accuracy analysis
 summaryDataAcc <- dataAcc %>%
-  group_by(ID,foreperiod,condition, trialType,
+  group_by(ID,foreperiod,expFP,condition, trialType,
            oneBackFP, oneBacktrialType, oneBackFPGo) %>%
   summarise(meanRT = mean(RT),
             meanAcc = mean(Acc),
@@ -345,7 +352,7 @@ summaryDataAcc <- dataAcc %>%
          scaledNumOneBackFP = scale(numOneBackFP)[,1])
 
 summaryDataAccGo <- dataAccGo %>%
-  group_by(ID,foreperiod,condition,
+  group_by(ID,foreperiod,expFP,condition,
            oneBackFP, oneBacktrialType, oneBackFPGo) %>%
   summarise(meanRT = mean(RT),
             meanAcc = mean(Acc),
@@ -361,7 +368,7 @@ summaryDataAccGo <- dataAccGo %>%
          scaledNumOneBackFP = scale(numOneBackFP)[,1])
 
 summaryDataAccNoGo <- dataAccNoGo %>%
-  group_by(ID,foreperiod,condition,
+  group_by(ID,foreperiod,expFP,condition,
            oneBackFP, oneBacktrialType, oneBackFPGo) %>%
   summarise(meanRT = mean(RT),
             meanAcc = mean(Acc),
@@ -376,15 +383,15 @@ summaryDataAccNoGo <- dataAccNoGo %>%
          squaredScaledNumForeperiod = scaledNumForeperiod^2,
          scaledNumOneBackFP = scale(numOneBackFP)[,1])
 
-#write_csv(goData, "./Analysis/goData.csv")
-#write_csv(goData2, "./Analysis/goData2.csv"
-#write_csv(goData2, "./Analysis/goData3.csv")
-#write_csv(goData2, "./Analysis/dataAcc.csv")
-#write_csv(goData2, "./Analysis/dataAccGo.csv")
-#write_csv(goData2, "./Analysis/dataAccNoGo.csv")
-#write_csv(summaryData, "./Analysis/summaryData.csv")
-#write_csv(summaryData2, "./Analysis/summaryData2.csv")
-#write_csv(summaryData2, "./Analysis/summaryData3.csv")
-#write_csv(summaryData2, "./Analysis/summaryDataAcc.csv")
-#write_csv(summaryData2, "./Analysis/summaryDataAccGo.csv")
-#write_csv(summaryData2, "./Analysis/summaryDataAccNoGo.csv")
+# write_csv(goData, "./Analysis/goData.csv")
+# write_csv(goData2, "./Analysis/goData2.csv")
+# write_csv(goData2, "./Analysis/goData3.csv")
+# write_csv(goData2, "./Analysis/dataAcc.csv")
+# write_csv(goData2, "./Analysis/dataAccGo.csv")
+# write_csv(goData2, "./Analysis/dataAccNoGo.csv")
+# write_csv(summaryData, "./Analysis/summaryData.csv")
+# write_csv(summaryData2, "./Analysis/summaryData2.csv")
+# write_csv(summaryData2, "./Analysis/summaryData3.csv")
+# write_csv(summaryData2, "./Analysis/summaryDataAcc.csv")
+# write_csv(summaryData2, "./Analysis/summaryDataAccGo.csv")
+# write_csv(summaryData2, "./Analysis/summaryDataAccNoGo.csv")

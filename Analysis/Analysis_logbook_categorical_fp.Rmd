@@ -1,0 +1,359 @@
+---
+title: "Analysis_logbook - experiment 1"
+author: "Alexandre Nobre"
+output: html_notebook
+date: "`r Sys.Date()`"
+bibliography: bibliography.bib
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Este documento detalha as estratégias de seleção de modelos para as análises com modelos mistos.
+
+```{r prepare functions and data, echo=FALSE, message=FALSE, warning=FALSE}
+# Data processing and plotting
+library(magrittr)
+library(tidyverse)
+library(lattice)
+library(gridExtra)
+library(data.table)
+library(knitr)
+
+# Linear modeling
+library(car)
+library(janitor)
+
+# Mixed effects modeling
+library(afex)
+library(emmeans)
+library(lme4)
+library(MuMIn)
+library(buildmer)
+library(broom.mixed)
+
+# Post-hocs
+library(marginaleffects)
+
+# Save defaults
+graphical_defaults <- par()
+options_defaults <- options() 
+
+# Read data
+source("./Analysis/Prepare_data_4.R")
+
+source("./Analysis/mixed_model_fitting_code.R")
+```
+
+# 0. Funções
+
+Inicialmente criamos as funções utilizadas para comparar os modelos: uma função para construir histogramas bonitos e uma função para construir tabelas com estatísticas de ajuste.
+
+```{r Functions to view results}
+hist_resid <- function(M,ptitle='Residuals') {
+  d <- data.frame(resid=residuals(M)) 
+  d  %>% ggplot(aes(x=resid)) + 
+    geom_histogram(aes(y=after_stat(density)), bins=75, color='black', fill='grey') + 
+    geom_density(color='darkred') + 
+    ggtitle(ptitle) -> pl
+  return(pl)
+}
+
+fitstats = function(M,mname='M') {
+  QQ<-qqnorm(residuals(M), plot.it=FALSE)
+  R2qq <- cor(QQ$x,QQ$y)^2
+  dfqq = data.frame(stat='R2qq', V1=R2qq)
+  r2tab <- r.squaredGLMM(M)  %>% 
+    t  %>% as.data.frame  %>% rownames_to_column(var='stat')  %>% 
+    rbind(.,dfqq)
+  r2tab$stat = c("$R^2_m$","$R^2_c$",'$R^2_{qq}$' )
+  colnames(r2tab) <- c('stat',mname)
+  return(r2tab)
+}
+```
+
+
+# 1. Seleção das variáveis dependentes
+
+Para estes modelos, inicialmente fazemos a seleção das variáveis dependentes. A seleção é feita comparando-se os ajustes de modelos mistos com cada variável dependente, incluindo como apenas o intercepto como modelo aleatório. Os valores de ajuste utilizados são:
+
+* Variância explicada pelos efeitos fixos
+* Variância explicada pelo modelo completo
+* Normalidade dos resíduos
+* Correlação entre valores ajustados pelo modelo e dados
+
+As variáveis comparadas são:
+
+* RT bruto
+* 1/RT
+* log10(RT)
+
+Além disso, também comparamos os modelos com limpeza de valores influentes (i.e., a mais de 3 desvios-padrão da média dos RTs individuais) para averiguar o quanto 
+
+```{r Fit models to choose dependente variable, message=FALSE}
+# Fit models with RT, inverse RT, and logRT without trimming
+fplmm1 <- mixed(formula = RT ~ foreperiod*condition*oneBackFP + 
+                  (1|ID),
+                data = goData,
+                control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                progress = TRUE,
+                expand_re = TRUE,
+                method =  'S',
+                REML=TRUE,
+                return = "merMod")
+
+invfplmm1 <- mixed(formula = invRT ~ foreperiod*condition*oneBackFP + 
+                     (1|ID),
+                   data = goData,
+                   control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                   progress = TRUE,
+                   expand_re = TRUE,
+                   method =  'S',
+                   REML=TRUE,
+                   return = "merMod")
+
+logfplmm1 <- mixed(formula = logRT ~ foreperiod*condition*oneBackFP + 
+                     (1|ID),
+                   data = goData,
+                   control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                   progress = TRUE,
+                   expand_re = TRUE,
+                   method =  'S',
+                   REML=TRUE,
+                   return = "merMod")
+
+# Now fit models after outlier trimming
+trimfplmm1 <- mixed(formula = RT ~ foreperiod*condition*oneBackFP + 
+                      (1|ID),
+                    data = goData2,
+                    control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                    progress = TRUE,
+                    expand_re = TRUE,
+                    method =  'S',
+                    REML=TRUE,
+                    return = "merMod")
+
+triminvfplmm1 <- mixed(formula = invRT ~ foreperiod*condition*oneBackFP + 
+                         (1|ID),
+                       data = goData2,
+                       control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                       progress = TRUE,
+                       expand_re = TRUE,
+                       method =  'S',
+                       REML=TRUE,
+                       return = "merMod")
+
+trimlogfplmm1 <- mixed(formula = logRT ~ foreperiod*condition*oneBackFP + 
+                         (1|ID),
+                       data = goData2,
+                       control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+                       progress = TRUE,
+                       expand_re = TRUE,
+                       method =  'S',
+                       REML=TRUE,
+                       return = "merMod")
+```
+
+Antes de olhar valores de ajuste, vamos olhar se algum dos modelos resultou em um ajuste singular, indicando que não foi possível ajustar o modelo com as configurações e a estrutura escolhida.
+
+```{r Check for singular fits}
+isSingular(fplmm1)
+isSingular(invfplmm1)
+isSingular(logfplmm1)
+isSingular(trimfplmm1)
+isSingular(triminvfplmm1)
+isSingular(trimlogfplmm1)
+```
+
+Nenhum dos modelos gerou um ajuste singular, então podemos continuar a comparação. Primeiro, elaboramos uma tabela com os valores de ajuste utilizados para a comparação.
+
+```{r Compare fit statistics, echo=FALSE, message=TRUE,warning=FALSE}
+R2table <- fitstats(fplmm1, 'RT') %>%
+  plyr::join(., fitstats(invfplmm1, '1/(RT)'), by='stat') %>%
+  plyr::join(., fitstats(logfplmm1, 'log(RT)'), by='stat') %>%
+  plyr::join(., fitstats(trimfplmm1, 'trim RT'), by='stat') %>%
+  plyr::join(., fitstats(triminvfplmm1, 'trim 1/(RT)'), by='stat') %>%
+  plyr::join(., fitstats(trimlogfplmm1, 'trim log(RT)'), by='stat') %>%
+  kable(digits=4)
+R2table
+```
+
+A variância explicada pelos efeitos fixos é maior para os dados não limpos, com uma pequena vantagem para 1/RT; enquanto a variância total explicada pelo modelo se beneficia da limpeza de dados altamente influentes, e mostra alguma vantagem para logRT. A correlação entre os resídios e os quantis teóricos é maior para 1/RT.
+
+Além de comparar os valores das estatísticas diretamente, plotamos os resíduos em qqplots e gráficos de dispersão com os resíduos e os valores ajustados.
+
+```{r Plot residuals quantiles, echo=FALSE}
+qqnorm(resid(fplmm1),
+       main="Normal qqplot - RT as DV")
+qqnorm(resid(invfplmm1),
+       main="Normal qqplot - 1/RT as DV")
+qqnorm(resid(logfplmm1),
+       main="Normal qqplot - logRT as DV")
+qqnorm(resid(trimfplmm1),
+       main="Normal qqplot - RT as DV, trimmed data")
+qqnorm(resid(triminvfplmm1),
+       main="Normal qqplot - 1/RT as DV, trimmed data")
+qqnorm(resid(trimlogfplmm1),
+       main="Normal qqplot - logRT as DV, trimmed data")
+```
+
+O modelo com 1/RT e com dados limpos se comporta melhor, seguido pelo modelo com logRT. A limpeza dos dados claramente melhora a correlação utilizando ambas as métricas.
+
+
+```{r Plot residuals, echo=FALSE}
+plot(fplmm1, resid(.) ~ fitted(.),
+     main="Residuals - RT as DV")
+plot(invfplmm1, resid(.) ~ fitted(.),
+     main="Residuals - 1/RT as DV")
+plot(logfplmm1, resid(.) ~ fitted(.),
+     main="Residuals - logRT as DV")
+plot(trimfplmm1, resid(.) ~ fitted(.),
+     main="Residuals - RT as DV, trimmed data")
+plot(triminvfplmm1, resid(.) ~ fitted(.),
+     main="Residuals - 1/RT as DV, trimmed data")
+plot(trimlogfplmm1, resid(.) ~ fitted(.),
+     main="Residuals - logRT as DV, trimmed data")
+```
+
+Os resíduos parecem se correlacionar com os valores ajustados para RT e 1/RT, tanto para o modelo com limpeza de dados influentes quanto sem a limpeza.
+
+No geral, podemos observar que:
+* a remoção de valores altamente influentes não tem efeito claro sobre o ajuste, mas melhora a distribuição dos resíduos;
+* o modelo com RT bruto tem o pior desempenho em todas as métricas;
+* o modelo com 1/RT explica uma variância maior nos dados, mas o modelo com logRT provê resíduos mais bem comportados.
+
+Considerando o que foi observado, optamos por utilizar logRT como variável dependente, pois, apesar de 1/RT ter desempenho equivalente, o uso dessa transformação dificulta a interpretação dos resultados.
+
+# 2. Encontrar máxima estrutura que convirja
+
+Aqui, encontrar a estrutura máxima do modelo que convirja. Há uma série de algoritmos para isso, incluindo a heurística "keep it maximal" de @barr_random_2013 e variações. Neste experimento, utilizamos o pacote buildmer [@voeten_buildmer_2022], que automatiza esse processo. Em outro documento, comparamos o desempenho do buildmer com as heurísticas manuais e observamos que os resultados são qualitativamente idênticos.
+
+```{r Find lmm maximal converging structure, message=FALSE}
+fplmm <- buildmer(formula = logRT ~ foreperiod*condition*oneBackFP + 
+                    (1+foreperiod*condition*oneBackFP|ID),
+                  data = goData2,
+                  buildmerControl = list(crit = "LRT",
+                                         family = gaussian(link = "identity"),
+                                         include = ~ foreperiod * condition * oneBackFP,
+                                         calc.anova = TRUE))
+formula(fplmm)
+```
+
+# 3. Compare log-transform to log-link function
+
+```{r Compare lmm with glmm, message=FALSE}
+fplmm <- mixed(formula = logRT ~ 1 + foreperiod + condition + foreperiod:condition + oneBackFP + 
+                 foreperiod:oneBackFP + condition:oneBackFP + foreperiod:condition:oneBackFP + 
+                 (1 + condition | ID),
+               data=goData2,
+               control = lmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+               progress = TRUE,
+               expand_re = FALSE,
+               method =  'KR',
+               REML=TRUE,
+               return = "merMod")
+
+```
+
+```{r}
+anova(fplmm)
+```
+
+
+```{r Fit glmm with log link function}
+
+fpglmm <- mixed(formula = RT ~ 1 + foreperiod + condition + foreperiod:condition + oneBackFP +
+                 foreperiod:oneBackFP + condition:oneBackFP + foreperiod:condition:oneBackFP +
+                 (1 + condition | ID),
+               data=goData2,
+               family = gaussian(link = "log"),
+               control = glmerControl(optimizer = c("bobyqa"),optCtrl=list(maxfun=2e5),calc.derivs = FALSE),
+               progress = TRUE,
+               expand_re = FALSE,
+               method =  'PB',
+               return = "merMod")
+
+
+anova(fpglmm)
+```
+
+
+```{r Simulate residuals for lmm}
+library(DHARMa)
+
+simulation_lmm <- simulateResiduals(fittedModel = fplmm, n = 1000, plot = F)
+```
+
+```{r Plot residuals for lmm}
+# Histogram
+hist(simulation_lmm)
+
+# QQ-plots
+plotQQunif(simulation_lmm)
+
+# Residuals vs fitted values
+plotResiduals(simulation_lmm)
+
+# Against foreperiod
+plotResiduals(simulation_lmm, form = goData2$foreperiod)
+
+# Against condition
+plotResiduals(simulation_lmm, form = goData2$condition)
+```
+
+```{r Simulate residuals for glmm}
+simulation_glmm <- simulateResiduals(fittedModel = fpglmm, n = 1000, plot = F)
+```
+
+```{r Plot residuals for glmm}
+# Histogram
+hist(simulation_glmm)
+
+# QQ-plots
+plotQQunif(simulation_glmm)
+
+# Residuals vs fitted values
+plotResiduals(simulation_glmm)
+
+# Against foreperiod
+plotResiduals(simulation_glmm, form = goData2$foreperiod)
+
+# Against condition
+plotResiduals(simulation_glmm, form = goData2$condition)
+```
+
+The lmm model evidently behaves much better.
+
+
+# 4. Find maximal converging structure for error analysis
+
+## 4.1. Errors in go trials (misses)
+```{r Find glmm maximal converging structure for misses}
+goaccglmer <- buildmer(error_result ~ foreperiod * condition + 
+                         (1+foreperiod*condition|ID), 
+                       data=dataAccGo,
+                       family = binomial(link = "logit"),
+                       buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite",
+                                                         include = ~ foreperiod:condition))
+
+
+isSingular(goaccglmer)
+formula(goaccglmer)
+```
+
+## 4.2. Errors in no-go trials (false alarms)
+```{r Find glmm maximal converging structure for false alarms}
+nogoaccglmer <- buildmer(error_result ~ foreperiod * condition + 
+                           (1+foreperiod*condition|ID), 
+                         data=dataAccNoGo,
+                         family = binomial(link = "logit"),
+                         buildmerControl = buildmerControl(calc.anova = TRUE, ddf = "Satterthwaite",
+                                                           include = ~ foreperiod:condition))
+
+isSingular(nogoaccglmer)
+formula(nogoaccglmer)
+```
+
+# References

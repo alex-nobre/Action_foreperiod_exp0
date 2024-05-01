@@ -3,9 +3,8 @@
 # Load necessary packages
 
 # Read and process data
-library(readr)
+library(tidyverse)
 library(magrittr)
-library(dplyr)
 library(data.table)
 
 # Plotting
@@ -17,16 +16,27 @@ library(gridGraphics)
 library(ggdist)
 library(ggpubr)
 
+# Descriptives
+library(Hmisc)
+
 # Linear models
+library(afex)
 library(car)
 library(codingMatrices)
+library(broom)
+library(modelr)
 
 # Mixed models
-library(afex)
 library(emmeans)
 library(lme4)
 library(performance)
 library(ggsignif)
+library(rtdists)
+
+# Bayesian analyses
+library(bayestestR)
+library(BayesFactor)
+library(brms)
 
 
 # Save defaults
@@ -67,6 +77,7 @@ n_trials_comp <- left_join(n_notrim, n_trim) %>%
          percent_trimmed = (trimmed/n_trials_no_trim) * 100) %>%
   summarise(meanT = mean(percent_trimmed), sdT = sd(percent_trimmed))
 
+#==================== Practice effects ====================
 # RTs across blocks (no condition)
 ggplot(data=summaryData2,
        aes(x=block,
@@ -91,6 +102,7 @@ ggplot(data=summaryData2,
         panel.background=element_blank())+
   scale_color_manual(values=c('orange','blue'))
 
+#================= Counterbalancing order ==================
 # RTs across blocks by counterbalancing order
 ggplot(data=summaryData2,
        aes(x=block,
@@ -109,7 +121,7 @@ ggplot(data=summaryData2,
   labs(title='RT by block split by counterbalancing order')
   
 
-# Check for influence of external fixation duration
+#================ Check for influence of external fixation duration ===================
 cor(goData2 %>% filter(condition == "external") %>% pull(RT),
     goData2 %>% filter(condition == "external") %>% pull(extFixationDuration))
 
@@ -131,7 +143,7 @@ ggsave("./Analysis/Plots/extfixduration.png",
        width = 13.4,
        height = 10)
 
-# Check for influence of latency of action key press on RT
+#============== Check for influence of latency of action key press on RT ================
 meanAT <- mean(goData2 %>% filter(condition == "action") %>% pull(action_trigger.rt))
 sdAT <- sd(goData2 %>% filter(condition == "action") %>% pull(action_trigger.rt))
 
@@ -164,7 +176,7 @@ ggplot(data=summaryDataAccGo,
            y=meanAcc)) +
   geom_point()
 
-#======================== Influence of delays between actions and WS onset ============
+#================ Influence of delays between actions and WS onset ============
 # Histograms of delays between action and WS
 ggplot(data = goData2) +
   geom_histogram(aes(x = round(delay,3)))
@@ -185,6 +197,167 @@ ggplot(data = goData2, aes(x = delay, y = RT)) +
 
 # Correlation between RT and delay excluding zero-delay trials
 cor(filter(goData2, delay > 0)$delay, filter(goData2, delay > 0)$RT)
+
+#================================= 1.2. Stopping-rule ======================================
+
+#================ 1.2.1. Prepare data ================
+
+# Variables used as predictors: numForeperiod and numOneBackFP
+# Dependent variable: logRT
+# Variables nested by condition and ID
+
+buildmodel <- function(data) {
+  lm(logRT ~ numForeperiod*numOneBackFP,
+     data = data)
+}
+
+nested_data <- goData2 %>%
+  select(ID, condition, numForeperiod, numOneBackFP, logRT) %>%
+  group_by(ID, condition) %>%
+  nest()
+
+fitted_data <- nested_data %>%
+  mutate(fit = map(data, buildmodel),
+         params = map(fit, tidy)) %>%
+  ungroup() %>%
+  unnest(c(params)) %>%
+  select(ID, condition, term, estimate) %>%
+  pivot_wider(names_from = term,
+              values_from = estimate)
+
+
+#============================== 1.2.2. Sequential bayes factors ===========================
+external_fits <- fitted_data[fitted_data$condition=='external',]
+action_fits <- fitted_data[fitted_data$condition=='action',]
+
+srange <- 10:nrow(external_fits)
+
+fp_bfs <- sapply(srange, function(range) {
+  extractBF(ttestBF(x = external_fits$numForeperiod[1:range],
+                    y = action_fits$numForeperiod[1:range],
+                    paired=TRUE),
+            onlybf = TRUE)
+})
+
+plot(srange, fp_bfs)
+lines(srange, fp_bfs)
+
+onebackfp_bfs <- sapply(srange, function(range) {
+  extractBF(ttestBF(x = external_fits$numOneBackFP[1:range],
+                    y = action_fits$numOneBackFP[1:range],
+                    paired=TRUE),
+            onlybf = TRUE)
+})
+
+plot(srange, onebackfp_bfs)
+lines(srange, onebackfp_bfs)
+
+interact_bfs <- sapply(srange, function(range) {
+  extractBF(ttestBF(x = external_fits$`numForeperiod:numOneBackFP`[1:range],
+                    y = action_fits$`numForeperiod:numOneBackFP`[1:range],
+                    paired=TRUE),
+            onlybf = TRUE)
+})
+
+plot(srange, interact_bfs)
+lines(srange, interact_bfs)
+
+#============================ 1.2.3. Mixed models BF comparison ============================ 
+
+
+# Condition x fp n
+with_condition <- mixed(formula = logRT ~ 1 + condition + numForeperiod + condition:numForeperiod + 
+                          (1 + condition + numForeperiod | ID),
+                        data = goData2,
+                        control = lmerControl(optimizer = c('bobyqa'), optCtrl = list(maxfun=2e5), calc.derivs = FALSE),
+                        progress = TRUE,
+                        expand_re = TRUE,
+                        method = 'S',
+                        REML = TRUE,
+                        return = 'merMod')
+
+isSingular(with_condition)
+
+no_condition <- mixed(formula = logRT ~ 1 + numForeperiod +
+                        (1 + numForeperiod | ID),
+                      data = goData2,
+                      control = lmerControl(optimizer = c('bobyqa'), optCtrl = list(maxfun=2e5), calc.derivs = FALSE),
+                      progress = TRUE,
+                      expand_re = TRUE,
+                      method = 'S',
+                      REML = TRUE,
+                      return = 'merMod')
+
+isSingular(no_condition)
+
+bic_to_bf(c(BIC(no_condition),
+            BIC(with_condition)),
+          denominator = c(BIC(no_condition)))
+
+# Condition x fp n x fp n-1
+
+with_onebackfp <- mixed(formula = logRT ~ 1 + condition + numForeperiod + condition:numForeperiod + 
+                          oneBackFP + numForeperiod:oneBackFP + condition:oneBackFP + 
+                          (1 + condition + numForeperiod | ID),
+                        data = data2,
+                        control = lmerControl(optimizer = c('bobyqa'), optCtrl = list(maxfun=2e5), calc.derivs = FALSE),
+                        progress = TRUE,
+                        expand_re = TRUE,
+                        method = 'S',
+                        REML = TRUE,
+                        return = 'merMod')
+
+isSingular(with_onebackfp)
+
+no_onebackfp <- mixed(formula = logRT ~ 1 + condition + numForeperiod + condition:numForeperiod +
+                        (1 + condition + numForeperiod | ID),
+                      data = data2,
+                      control = lmerControl(optimizer = c('bobyqa'), optCtrl = list(maxfun=2e5), calc.derivs = FALSE),
+                      progress = TRUE,
+                      expand_re = TRUE,
+                      method = 'S',
+                      REML = TRUE,
+                      return = 'merMod')
+
+
+isSingular(no_onebackfp)
+
+BIC(no_onebackfp, with_onebackfp)
+
+bic_to_bf(c(BIC(no_onebackfp),
+            BIC(with_onebackfp)),
+          denominator = c(BIC(no_onebackfp)))
+
+
+# Condition x fp n x fp n-1 (with and without condition)
+with_condition <- mixed(formula = logRT ~ 1 + condition + numForeperiod + condition:numForeperiod + 
+                          oneBackFP + numForeperiod:oneBackFP + condition:oneBackFP + condition:numForeperiod:oneBackFP +
+                          (1 + condition + numForeperiod | ID),
+                        data = goData2,
+                        control = lmerControl(optimizer = c('bobyqa'), optCtrl = list(maxfun=2e5), calc.derivs = FALSE),
+                        progress = TRUE,
+                        expand_re = TRUE,
+                        method = 'S',
+                        REML = TRUE,
+                        return = 'merMod')
+
+isSingular(with_condition)
+
+no_condition <- mixed(formula = logRT ~ 1 + numForeperiod + oneBackFP + numForeperiod:oneBackFP +
+                        (1 + numForeperiod | ID),
+                      data = goData2,
+                      control = lmerControl(optimizer = c('bobyqa'), optCtrl = list(maxfun=2e5), calc.derivs = FALSE),
+                      progress = TRUE,
+                      expand_re = TRUE,
+                      method = 'S',
+                      REML = TRUE,
+                      return = 'merMod')
+
+isSingular(no_condition)
+
+bic_to_bf(c(BIC(no_condition),
+            BIC(with_condition)),
+          denominator = c(BIC(no_condition)))
 
 #==========================================================================================#
 #======================================= 1. Descriptives ==================================
@@ -221,6 +394,62 @@ ggplot(data = summaryData2,
         axis.title = element_text(size = rel(1.2)))
 
 
+# Histograms of slopes
+buildmodel <- function(data) {
+  lm(logRT ~ numForeperiod*numOneBackFP,
+     data = data)
+}
+
+nested_data <- goData2 %>%
+  select(ID, condition, numForeperiod, numOneBackFP, logRT) %>%
+  group_by(ID, condition) %>%
+  nest()
+
+fitted_data <- nested_data %>%
+  mutate(fit = map(data, buildmodel),
+         params = map(fit, tidy)) %>%
+  ungroup() %>%
+  unnest(c(params)) %>%
+  select(ID, condition, term, estimate) %>%
+  pivot_wider(names_from = term,
+              values_from = estimate)
+
+
+external_fits <- fitted_data[fitted_data$condition=='external',]
+action_fits <- fitted_data[fitted_data$condition=='action',]
+
+ggplot(data = fitted_data, aes(x = numForeperiod)) +
+  geom_histogram() +
+  facet_wrap(~condition)
+
+# Plot grand means
+RT_by_condition <- ggplot(data = summaryData2 %>% 
+                               group_by(ID, foreperiod, condition) %>% 
+                               summarise(meanRT = mean(meanRT)),
+                             aes(x = foreperiod,
+                                 y = meanRT,
+                                 color = condition)) +
+  geom_jitter(height = 0, width = 0.15, size = 1.0, alpha = 0.3) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 1.2, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.0, width = 0.1, geom = "errorbar") + 
+  labs(title = "RT",
+       x = "FP (s)",
+       y = "Mean RT (s)",
+       color = "Condition") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(size = rel(1.2)),
+        axis.title = element_text(size = rel(1.2)),
+        legend.key = element_blank()) +
+  scale_color_manual(values = c("orange", "blue"), labels = c("External", "Action"))
+ggplot2::ggsave("./Analysis/Plots/RT_by_condition.jpg",
+                RT_by_condition,
+                width = 15,
+                height = 10)
+
 # Plot means by participant
 rt_by_fp_cond_part <- ggplot(data = summaryData2,
                              aes(x = foreperiod,
@@ -246,71 +475,7 @@ ggplot2::ggsave("./Analysis/Plots/RT_by_cond_fp_part.png",
                 width = 6.7,
                 height = 5)
 
-# Plot grand means
-RT_by_condition <- ggplot(data = summaryData2 %>% 
-                               group_by(ID, foreperiod, condition) %>% 
-                               summarise(meanRT = mean(meanRT)),
-                             aes(x = foreperiod,
-                                 y = meanRT,
-                                 color = condition)) +
-  geom_jitter(height = 0, width = 0.15, alpha = 0.5) +
-  stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", linewidth = 1.4, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.2, width = 0.1, geom = "errorbar") + 
-  labs(title = "RT",
-       x = "FP (s)",
-       y = "Mean RT (s)",
-       color = "Condition") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.2)),
-        legend.key = element_blank()) +
-  scale_color_manual(values = c("orange", "blue"), labels = c("External", "Action"))
-ggplot2::ggsave("./Analysis/Plots/RT_by_condition.pdf",
-                RT_by_condition,
-                width = 15,
-                height = 10)
 
-# Em portugues
-RT_by_condition_port <- ggplot(data = summaryData2 %>% 
-                            group_by(ID, foreperiod, condition) %>% 
-                            summarise(meanRT = mean(meanRT)),
-                          aes(x = foreperiod,
-                              y = meanRT,
-                              color = condition)) +
-  geom_jitter(height = 0, width = 0.15, size = 3.1, alpha = 0.5) +
-  stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", linewidth = 3.9, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 3.7, width = 0.1, geom = "errorbar") + 
-  labs(title = "Experimento 1",
-       x = "FP (s)",
-       y = "TR médio (s)",
-       color = "Condição") +
-  theme(plot.title = element_text(size = rel(2.0), hjust = 0.5, margin = margin(t = 0, r = 0, b = 25, l = 0)),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.title = element_text(size = rel(2.0)),
-        axis.title.x = element_text(margin = margin(t = 20, r = 0, b = 2.75, l = 0)),
-        axis.title.y = element_text(margin = margin(t = 0, r = 20, b = 0, l = 0)),
-        axis.text = element_text(size = rel(1.7)),
-        legend.title = element_text(size = rel(1.8)),
-        legend.text = element_text(size = rel(1.6)),
-        legend.key = element_blank(),
-        legend.box.spacing = unit(0, "pt"),
-        legend.margin = margin(5.5, 5.5, 5.5, 1),
-        legend.position = "none") +
-  scale_color_manual(values = c("orange", "blue"), labels = c("Externa", "Ação"))
-
-# Save
-ggplot2::ggsave("./Analysis/Plots/RT_by_condition_port.tiff",
-                RT_by_condition_port,
-                width = 25,
-                height = 16.66,
-                units = "cm")
 
 
 # Boxplot of RT by FP and condition
@@ -353,6 +518,27 @@ ggplot(data = summaryData2,
         axis.title = element_text(size = rel(1.2))) +
   scale_color_manual(values = c("orange", "blue"))
 
+# Using exp(-foreperiod)
+rt_by_expfp_condition <- ggplot(data = summaryData2 %>% 
+                                  group_by(ID, expFP, condition) %>% 
+                                  summarise(meanRT = mean(meanRT)),
+                                aes(x = expFP,
+                                    y = meanRT,
+                                    color = condition)) +
+  geom_jitter(height = 0, width = 0.005, alpha = 0.5) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 1.4, aes(group = condition)) +
+  stat_summary(fun.data = "mean_se", linewidth = 1.2, width = 0.02, geom = "errorbar") +
+  labs(title = "RT",
+       x = "exp(-FP)", 
+       y = "Mean RT",
+       color = "Condition") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank()) +
+  scale_color_manual(values = c("orange","blue"))
+
 
 # Sequential effects (separated by condition)
 ggplot(data = summaryData2 %>%
@@ -390,10 +576,10 @@ seqEff_by_oneback <- ggplot(data = summaryData2 %>%
                             aes(x = foreperiod,
                                 y = meanRT,
                                 color=condition)) +
-  geom_jitter(height = 0, width = 0.30, alpha = 0.5) +
+  geom_jitter(height = 0, width = 0.30, size = 1.0, alpha = 0.3) +
   stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", linewidth = 1.4, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.2, width = 0.1, geom = "errorbar") + 
+  stat_summary(fun = "mean", geom = "line", linewidth = 1.2, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.0, width = 0.1, geom = "errorbar") + 
   labs(x = "FP (s)",
        y = "Mean RT (s)",
        color = "Condition") +
@@ -415,61 +601,12 @@ seqEff_by_oneback <- ggplot(data = summaryData2 %>%
                                     default = label_parsed)) +
   scale_color_manual(values = c("orange", "blue"), labels = c("External", "Action"))
 
-ggsave("./Analysis/Plots/SeqEff.pdf",
+ggsave("./Analysis/Plots/SeqEff.jpg",
        seqEff_by_oneback,
        width = 20,
        height = 8.33,
        units = "cm")
 
-ggsave("./Analysis/Plots/SeqEff.tiff",
-       seqEff_by_oneback,
-       width = 20,
-       height = 11.11,
-       unit = "cm")
-
-# Sequential effects separated by FP n-1 em portugues
-seqEff_by_oneback_port <- ggplot(data = summaryData2 %>%
-                              group_by(ID, foreperiod, condition, oneBackFP) %>%
-                              summarise(meanRT = mean(meanRT)),
-                            aes(x = foreperiod,
-                                y = meanRT,
-                                color=condition)) +
-  geom_jitter(height = 0, width = 0.30, size = 3.5, alpha = 0.5) +
-  stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", linewidth = 3.9, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 3.7, width = 0.1, geom = "errorbar") + 
-  labs(title = "Experimento 1: efeitos sequenciais",
-       x = expression("FP"[n]*" (s)"),
-       y = "TR médio (s)",
-       color = "Condição") +
-  theme(plot.title = element_text(size = rel(2.0), hjust = 0.5, margin = margin(t = 0, r = 0, b = 25, l = 0)),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        strip.background = element_blank(),
-        strip.text = element_text(size = rel(2.0)),
-        axis.title = element_text(size = rel(2.0)),
-        axis.title.x = element_text(margin = margin(t = 20, r = 0, b = 2.75, l = 0)),
-        axis.title.y = element_text(margin = margin(t = 0, r = 20, b = 0, l = 0)),
-        axis.text = element_text(size = rel(1.7)),
-        legend.title = element_text(size = rel(1.8)),
-        legend.text = element_text(size = rel(1.6)),
-        legend.key = element_blank(),
-        legend.box.spacing = unit(0, "pt"),
-        legend.margin = margin(5.5, 5.5, 5.5, 1)) +
-  facet_wrap(~oneBackFP,
-             labeller = as_labeller(c(`0.6` = "FP[n-1] == 0.6",
-                                      `1.2` = "FP[n-1] == 1.2",
-                                      `1.8` = "FP[n-1] == 1.8"),
-                                    default = label_parsed)) +
-  scale_color_manual(values = c("orange", "blue"), labels = c("Externa", "Ação"))
-
-# Save
-ggplot2::ggsave("./Analysis/Plots/seqEffs_exp1_port.tiff",
-                seqEff_by_oneback_port,
-                width = 35,
-                height = 23.32,
-                units = "cm")
 
 # Boxplot
 ggplot(data = summaryData2,
@@ -575,16 +712,16 @@ ggsave("./Analysis/Plots/SeqEffTwoBack.png",
        height = 5)
 
 # Accuracy
-acc_plot <- ggplot(data = summaryDataAcc %>% 
+error_plot <- ggplot(data = summaryDataAcc %>% 
                      group_by(ID, foreperiod, condition) %>%
                      summarise(errorRate = mean(errorRate)),
                    aes(x = foreperiod,
                        y = errorRate,
                        color = condition)) +
-  geom_jitter(height = 0, width = 0.15, alpha = 0.5) +
+  geom_jitter(height = 0, width = 0.15, size = 1.0, alpha = 0.3) +
   stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", linewidth = 1.4, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.2, width = 0.1, geom = "errorbar") +
+  stat_summary(fun = "mean", geom = "line", linewidth = 1.2, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.0, width = 0.1, geom = "errorbar") +
   scale_color_manual(values = c("orange", "blue"),
                      labels = c("External", "Action")) +
   labs(title = "All trials",
@@ -600,22 +737,22 @@ acc_plot <- ggplot(data = summaryDataAcc %>%
         legend.title = element_text(size = rel(1.8)),
         plot.title = element_text(hjust = 0.5, size = rel(2.0)),
         legend.key = element_blank())
-ggsave("./Analysis/Plots/acc_by_condition.png",
+ggsave("./Analysis/Plots/acc_by_condition.jpg",
        acc_plot,
        width = 15,
        height = 10)
 
 # Accuracy go
-acc_go_plot <- ggplot(data = summaryDataAccGo %>% 
+error_go_plot <- ggplot(data = summaryDataAccGo %>% 
          group_by(ID, foreperiod, condition) %>%
          summarise(errorRate = mean(errorRate)),
        aes(x = foreperiod,
            y = errorRate,
            color = condition)) +
-  geom_jitter(height = 0, width = 0.15, alpha = 0.5) +
+  geom_jitter(height = 0, width = 0.15, size = 1.0, alpha = 0.3) +
   stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", linewidth = 1.4, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.2, width = 0.1, geom = "errorbar") + 
+  stat_summary(fun = "mean", geom = "line", linewidth = 1.2, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.0, width = 0.1, geom = "errorbar") + 
   scale_color_manual(values = c("orange", "blue"),
                      labels = c("External", "Action")) +
   labs(title = "Misses",
@@ -631,22 +768,22 @@ acc_go_plot <- ggplot(data = summaryDataAccGo %>%
         legend.title = element_text(size = rel(1.8)),
         plot.title = element_text(hjust = 0.5, size = rel(2.0)),
         legend.key = element_blank())
-ggsave("./Analysis/Plots/acc_by_condition_go.png",
-       acc_go_plot,
+ggsave("./Analysis/Plots/error_by_condition_go.jpg",
+       error_go_plot,
        width = 15,
        height = 10)
 
 # Accuracy no go
-acc_nogo_plot <- ggplot(data = summaryDataAccNoGo %>% 
+error_nogo_plot <- ggplot(data = summaryDataAccNoGo %>% 
          group_by(ID, foreperiod, condition) %>%
          summarise(errorRate = mean(errorRate)),
        aes(x = foreperiod,
            y = errorRate,
            color = condition)) +
-  geom_jitter(height = 0, width = 0.15, alpha = 0.5) +
+  geom_jitter(height = 0, width = 0.15, size = 1.0, alpha = 0.3) +
   stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", linewidth = 1.4, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.2, width = 0.1, geom = "errorbar") + 
+  stat_summary(fun = "mean", geom = "line", linewidth = 1.2, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.0, width = 0.1, geom = "errorbar") + 
   scale_color_manual(values = c("orange", "blue"),
                      labels = c("External", "Action")) +
   labs(title = "False alarms",
@@ -665,28 +802,28 @@ acc_nogo_plot <- ggplot(data = summaryDataAccNoGo %>%
         legend.box.spacing = unit(0, "pt"),
         legend.margin = margin(5.5, 5.5, 5.5, 1),
         plot.margin = unit(c(5.5, 5.5, 5.5, 1), "pt"))
-ggsave("./Analysis/Plots/acc_by_condition_nogo.png",
-       acc_nogo_plot,
+ggsave("./Analysis/Plots/error_by_condition_nogo.jpg",
+       error_nogo_plot,
        width = 15,
        height = 10)
 
-# Acuracy plots in single panel
+# Error plots in single panel
 # Save legend as grob
-cond_legend <- gtable_filter(ggplot_gtable(ggplot_build(acc_nogo_plot + 
+cond_legend <- gtable_filter(ggplot_gtable(ggplot_build(error_nogo_plot + 
                                                           theme(legend.title = element_text(size = rel(1.1)),
                                                                 legend.text = element_text(size = rel(0.9))))), "guide-box")
 
 # Visualize
-grid.arrange(acc_plot + theme(legend.position = "none",
+grid.arrange(error_plot + theme(legend.position = "none",
                               axis.text = element_text(size = rel(1.2)),
                               axis.title = element_text(size = rel(1.4)),
                               plot.title = element_text(size = rel(1.5))),
-             acc_go_plot + theme(legend.position = "none",
+             error_go_plot + theme(legend.position = "none",
                                  axis.text = element_text(size = rel(1.2)),
                                  axis.title = element_text(size = rel(1.4)),
                                  axis.title.y = element_blank(),
                                  plot.title = element_text(size = rel(1.5))),
-             acc_nogo_plot + theme(legend.position = "none",
+             error_nogo_plot + theme(legend.position = "none",
                                    axis.text = element_text(size = rel(1.2)),
                                    axis.title = element_text(size = rel(1.4)),
                                    axis.title.y = element_blank(),
@@ -696,16 +833,16 @@ grid.arrange(acc_plot + theme(legend.position = "none",
              widths = c(3/10, 3/10, 3/10, 1/10))
 
 # Save
-acc_all_plots <- arrangeGrob(acc_plot + theme(legend.position = "none",
+error_all_plots <- arrangeGrob(error_plot + theme(legend.position = "none",
                                               axis.text = element_text(size = rel(1.2)),
                                               axis.title = element_text(size = rel(1.4)),
                                               plot.title = element_text(size = rel(1.5))),
-                             acc_go_plot + theme(legend.position = "none",
+                             error_go_plot + theme(legend.position = "none",
                                                  axis.text = element_text(size = rel(1.2)),
                                                  axis.title = element_text(size = rel(1.4)),
                                                  axis.title.y = element_blank(),
                                                  plot.title = element_text(size = rel(1.5))),
-                             acc_nogo_plot + theme(legend.position = "none",
+                             error_nogo_plot + theme(legend.position = "none",
                                                    axis.text = element_text(size = rel(1.2)),
                                                    axis.title = element_text(size = rel(1.4)),
                                                    axis.title.y = element_blank(),
@@ -714,14 +851,14 @@ acc_all_plots <- arrangeGrob(acc_plot + theme(legend.position = "none",
                              nrow = 1,
                              widths = c(3/10, 3/10, 3/10, 1/10))
 
-ggsave("./Analysis/Plots/acc_all_plots.pdf",
-       acc_all_plots,
+ggsave("./Analysis/Plots/error_all_plots.jpg",
+       error_all_plots,
        width = 12,
        height = 6.67)
 
 # RT and accuracy in single panel
 # Save legend as grob
-cond_legend <- gtable_filter(ggplot_gtable(ggplot_build(acc_nogo_plot + 
+cond_legend <- gtable_filter(ggplot_gtable(ggplot_build(error_nogo_plot + 
                                                           theme(legend.title = element_text(size = rel(1.1)),
                                                                 legend.text = element_text(size = rel(0.9))))), "guide-box")
 
@@ -732,13 +869,13 @@ grid.arrange(RT_by_condition + labs(tag = "A", x = "") +
                      axis.title = element_text(size = rel(1.3)),
                      plot.title = element_text(size = rel(1.4)),
                      plot.tag = element_text(size = rel(1.5))),
-             acc_go_plot + labs(tag = "B") +
+             error_go_plot + labs(tag = "B") +
                theme(legend.position = "none",
                      axis.text = element_text(size = rel(1.1)),
                      axis.title = element_text(size = rel(1.3)),
                      plot.title = element_text(size = rel(1.4)),
                      plot.tag = element_text(size = rel(1.5))),
-             acc_nogo_plot + labs(tag = "C", x = "") + 
+             error_nogo_plot + labs(tag = "C", x = "") + 
                theme(legend.position = "none",
                      axis.text = element_text(size = rel(1.1)),
                      axis.title = element_text(size = rel(1.3)),
@@ -750,19 +887,19 @@ grid.arrange(RT_by_condition + labs(tag = "A", x = "") +
              widths = c(5/17, 5/17, 5/17, 2/17))
 
 
-rt_acc_plots <- arrangeGrob(RT_by_condition + labs(tag = "A", x = "") +
+rt_error_plots <- arrangeGrob(RT_by_condition + labs(tag = "A", x = "") +
                               theme(legend.position = "none",
                                     axis.text = element_text(size = rel(1.1)),
                                     axis.title = element_text(size = rel(1.3)),
                                     plot.title = element_text(size = rel(1.4)),
                                     plot.tag = element_text(size = rel(1.5))),
-                            acc_go_plot + labs(tag = "B") +
+                            error_go_plot + labs(tag = "B") +
                               theme(legend.position = "none",
                                     axis.text = element_text(size = rel(1.1)),
                                     axis.title = element_text(size = rel(1.3)),
                                     plot.title = element_text(size = rel(1.4)),
                                     plot.tag = element_text(size = rel(1.5))),
-                            acc_nogo_plot + labs(tag = "C", x = "") + 
+                            error_nogo_plot + labs(tag = "C", x = "") + 
                               theme(legend.position = "none",
                                     axis.text = element_text(size = rel(1.1)),
                                     axis.title = element_text(size = rel(1.3)),
@@ -773,27 +910,12 @@ rt_acc_plots <- arrangeGrob(RT_by_condition + labs(tag = "A", x = "") +
                             nrow = 1,
                             widths = c(5/17, 5/17, 5/17, 2/17))
 
-ggsave("./Analysis/Plots/rt_acc_plots.pdf",
-       rt_acc_plots,
+ggsave("./Analysis/Plots/rt_error_plots.jpg",
+       rt_error_plots,
        width = 20,#16,
        height = 8.33,#11.94,
        units = "cm")
 
-
-# For poster
-ggplot2::ggsave("G:/My Drive/Post-doc/Eventos/TRF-3/Poster/RT_by_condition.tiff",
-                RT_by_condition + labs(title = "Experiment 1") +
-                  theme(plot.title = element_text(size = rel(3.0)),
-                        axis.title = element_text(size = rel(2.6)),
-                        axis.text = element_text(size = rel(2.3)),
-                        legend.title = element_text(size = rel(2.4)),
-                        legend.text = element_text(size = rel(2.2)),
-                        legend.key = element_blank(),
-                        legend.box.spacing = unit(0, "pt"),
-                        legend.margin = margin(5.5, 5.5, 5.5, 1)),
-                width = 35,
-                height = 23.33,
-                units = "cm")
 
 #  n-1 trial type
 ggplot(data = summaryData2,
@@ -826,10 +948,10 @@ seqEff_by_oneback_trialtype <- ggplot(data = summaryData2 %>%
        aes(x = foreperiod,
            y = meanRT,
            color=condition)) +
-  geom_jitter(height = 0, width = 0.30, alpha = 0.5) +
+  geom_jitter(height = 0, width = 0.30, size = 1.0, alpha = 0.3) +
   stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", linewidth = 1.4, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.2, width = 0.1, geom = "errorbar") + 
+  stat_summary(fun = "mean", geom = "line", linewidth = 1.2, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.0, width = 0.1, geom = "errorbar") + 
   labs(x = "FP (s)",
        y = "Mean RT (s)",
        color = "Condition") +
@@ -852,7 +974,7 @@ seqEff_by_oneback_trialtype <- ggplot(data = summaryData2 %>%
                                  oneBacktrialType = c("go" = "Go", "no-go" = "No-go"))) +
   scale_color_manual(values = c('orange', 'blue'), labels = c("External", "Action"))
 
-ggsave("./Analysis/Plots/SeqEff_oneBackTrialType.pdf",
+ggsave("./Analysis/Plots/SeqEff_oneBackTrialType.jpg",
        seqEff_by_oneback_trialtype,
        width = 20,
        height = 14.33,
@@ -968,6 +1090,7 @@ fpAnova <- aov_ez(id = "ID",
        anova_table = list(es = "pes"))
 
 
+# Check anova requirements
 check_sphericity(fpAnova)
 
 is_norm <- check_normality(fpAnova)
@@ -976,22 +1099,9 @@ plot(is_norm)
 
 plot(is_norm, type = "qq")
 
-nice(fpAnova)
 summary(fpAnova)
 
-
-fpregression <- lm(meanRT ~ condition * foreperiod, data = summaryData)
-summary(fpregression)
-anova(fpregression)
-
-logfpregression <- lm(meanRT ~ condition * logFP, data = summaryData)
-anova(logfpregression)
-
-# fpEmmeans <- emmeans(fpAnova,
-#                      pairwise ~ condition|foreperiod,
-#                      adjust = 'none')
-
-
+# Pairwise comparisons
 fpEmmeans <- emmeans(fpAnova,
                      pairwise ~ foreperiod|condition,
                      adjust = 'bonferroni')
@@ -1006,7 +1116,7 @@ fpEmmeansContrasts <- contrast(fpEmmeans[[1]],
 
 
 
-
+# Anova with logRT
 logFPAnova <- aov_ez(id = "ID",
                      dv = "meanLogRT",
                      data = summaryData2,
@@ -1015,6 +1125,26 @@ logFPAnova <- aov_ez(id = "ID",
 logFPAnova
 
 check_sphericity(logFPAnova)
+
+
+# Anova with expFP
+expFPAnova <- aov_ez(id = "ID",
+                     dv = "meanRT",
+                     data = summaryData2,
+                     within = c("expFP", "condition"))
+
+expFPAnova
+
+
+# Check anova requirements
+check_sphericity(expFPAnova)
+
+check_normality(expFPAnova) |>
+  plot()
+
+check_normality(expFPAnova) |>
+  plot(type = "qq")
+
 
 
 #======================= 2.2. Sequential effects ============================
@@ -1038,10 +1168,6 @@ nice(seqEffAnova)
 conditionEmmeans <- emmeans(seqEffAnova,
                      pairwise ~ condition|foreperiod,
                      adjust = "holm")
-
-# fpEmmeansContrasts <- contrast(fpEmmeans[[1]],
-#                                interaction=c('poly'),
-#                                adjust='bonferroni')
 
 
 conditionEmmeansContrasts <- contrast(conditionEmmeans[[1]],
@@ -1087,10 +1213,6 @@ conditionEmmeans <- emmeans(seqEffLogAnova,
                             pairwise ~ condition|foreperiod,
                             adjust = "holm")
 
-# fpEmmeansContrasts <- contrast(fpEmmeans[[1]],
-#                                interaction=c('poly'),
-#                                adjust='bonferroni')
-
 
 conditionEmmeansContrasts <- contrast(conditionEmmeans[[1]],
                                       interaction = c("consec"),
@@ -1108,7 +1230,19 @@ oneBackfpEmmeansConstrasts <- contrast(oneBackEmmeans[[1]],
 
 
 
+#========== 2.2.4. expFP ============
+seqEffExpAnova <- aov_ez(id = "ID",
+                         dv = "meanRT",
+                         data = summaryData2,
+                         within = c("expFP", "condition", "oneBackFP"),
+                         anova_table = list(es = "pes"))
 
+check_sphericity(seqEffExpAnova)
+
+check_normality(seqEffExpAnova) |>
+  plot()
+
+summary(seqEffExpAnova)
 
 
 # Without no-go n-1 trials
@@ -1127,7 +1261,7 @@ seqEff2Anova <- aov_ez(id = "ID",
 
 
 
-#=================== 2.2.2. Accuracy ==========================
+#=================== 2.2.3. Accuracy ==========================
 # Set constrasts for variables used in ANOVAs
 contrasts(summaryDataAll$foreperiod) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2)
 contrasts(summaryDataAll$condition) <- c(-1/2, 1/2)
@@ -1168,9 +1302,9 @@ AccAnova <- aov_ez(id = "ID",
                    within = c("foreperiod", "condition", "oneBackFPGo"))
 
 
-#================= 2.2.3. N-1 trial type, condition and sequential effects =================
+#================= 2.2.4. N-1 trial type, condition and sequential effects =================
 
-# 2.2.3.1. Anova with foreperiod, condition and n-1 trial type
+# 2.2.4.1. Anova with foreperiod, condition and n-1 trial type
 trialTypeAnova <- aov_ez(id = "ID",
                       dv = "meanRT",
                       data = summaryData2,
@@ -1187,7 +1321,7 @@ ttypEmmeansContrast <- contrast(ttypEmmeans[[1]],
                                 interaction = c("pairwise"),
                                 adjust = "holm")
 
-# 2.2.3.2. Anova with foreperiod, n-1 trial type and sequential effects
+# 2.2.4.2. Anova with foreperiod, n-1 trial type and sequential effects
 seqEfftrialTypeAnova <- aov_ez(id = "ID",
                          dv = "meanRT",
                          data = summaryData,
@@ -1196,7 +1330,7 @@ seqEfftrialTypeAnova <- aov_ez(id = "ID",
 nice(seqEfftrialTypeAnova,
      correction='none')
 
-# 2.2.3.3. Anova with foreperiod, condition, n-1 trial type and sequential effects
+# 2.2.4.3. Anova with foreperiod, condition, n-1 trial type and sequential effects
 fullAnova <- aov_ez(id = "ID",
                     dv = "meanRT",
                     data = summaryData2,
@@ -1220,7 +1354,7 @@ nice(goAnova,
      correction='none')
 
 
-#================= 2.4. Condition and sequential effects including no-go FP n-1 =================
+#================= 2.5. Condition and sequential effects including no-go FP n-1 =================
 
 # Anova
 seqEffGoAnova <- aov_ez(id = "ID",
@@ -1240,7 +1374,7 @@ contrast(seqEffGoemm[[1]],
          adjust = "holm")
 
 
-#==================== 2.4. Foreperiod, condition and block ======================
+#==================== 2.6. Foreperiod, condition and block ======================
 blocklm <- lm(meanRT ~ foreperiod * counterbalance * block,
               data = summaryData)
 
@@ -1248,13 +1382,11 @@ anova(blocklm)
 Anova(blocklm)
 
 
-# 3.5. Learning 
-
-# 4.2. Separate tests by foreperiod
+# Separate tests by foreperiod
 summaryDatafp06 <- summaryData %>%
   filter(foreperiod=='0.6')
 
-# 2.2.1. Anova for FP n-1
+#  Anova for FP n-1
 seqEffAnovafp06 <- aov_ez(id = "ID",
                       dv = "meanRT",
                       data = summaryDatafp06,
