@@ -395,3 +395,4 @@ summaryDataAccNoGo <- dataAccNoGo %>%
 # write_csv(summaryData2, "./Analysis/summaryDataAcc.csv")
 # write_csv(summaryData2, "./Analysis/summaryDataAccGo.csv")
 # write_csv(summaryData2, "./Analysis/summaryDataAccNoGo.csv")
+# save(goData2, file = "./Analysis/goData2.Rdata")

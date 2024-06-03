@@ -355,5 +355,18 @@ nogoaccglmer <- buildmer(error_result ~ foreperiod * condition +
 isSingular(nogoaccglmer)
 formula(nogoaccglmer)
 ```
+# 5. RT without no-go trials
+```{r RT without no-go trials}
+fplmm_go <- buildmer(logRT ~ foreperiod * condition * oneBackFP + 
+                             (1 + foreperiod * condition * oneBackFP|ID), 
+                           data=goData3,
+                           buildmerControl = buildmerControl(crit = "LRT",
+                                                              family = gaussian(link = "identity"),
+                                                              calc.anova = TRUE,
+                                                              include = ~ foreperiod * condition * oneBackFP))
+
+isSingular(fplmm_go)
+formula(fplmm_go)
+```
 
 # References

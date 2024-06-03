@@ -1,6 +1,6 @@
 
 
-# Load necessary packages
+# Load packages
 
 # Read and process data
 library(tidyverse)
@@ -15,6 +15,8 @@ library(gridExtra)
 library(gridGraphics)
 library(ggdist)
 library(ggpubr)
+library(extrafont)
+library(egg)
 
 # Descriptives
 library(Hmisc)
@@ -43,9 +45,15 @@ library(brms)
 graphical_defaults <- par()
 options_defaults <- options() 
 
+# Load fonts from extrafonts
+loadfonts()
+
 # Read data
 source('./Analysis/Prepare_data_4.R')
-source("./Analysis/R_rainclouds.R")
+
+# Prepare theme for plots
+source("./Analysis/plot_theme.R")
+theme_set(mytheme)
 
 #==========================================================================================#
 #======================================= 0. Data quality ===================================
@@ -100,7 +108,7 @@ ggplot(data=summaryData2,
   theme(panel.grid.major=element_blank(),
         panel.grid.minor=element_blank(),
         panel.background=element_blank())+
-  scale_color_manual(values=c('orange','blue'))
+  cond_cols
 
 #================= Counterbalancing order ==================
 # RTs across blocks by counterbalancing order
@@ -117,7 +125,7 @@ ggplot(data=summaryData2,
         panel.background=element_blank(),
         axis.text = element_text(size = rel(1.5)),
         axis.title = element_text(size = rel(1.5)))+
-  scale_color_manual(values=c('blue','orange')) +
+  cond_cols +
   labs(title='RT by block split by counterbalancing order')
   
 
@@ -360,40 +368,10 @@ bic_to_bf(c(BIC(no_condition),
           denominator = c(BIC(no_condition)))
 
 #==========================================================================================#
-#======================================= 1. Descriptives ==================================
+#==================================== 1. Descriptive analyses ==============================
 #==========================================================================================#
 #========== 1.1. Plots ==============
   
-# Accuracy
-summaryAccData <- data %>%
-  group_by(ID,foreperiod,condition) %>%
-  summarise(meanAcc=mean(Acc)) %>%
-  ungroup()
-
-ggplot(data=summaryAccData,
-       aes(x=foreperiod,
-           y=meanAcc,
-           color=condition)) +
-  geom_boxplot()
-
-# Only by condition
-ggplot(data = summaryData2,
-       aes(x = condition,
-           y = meanLogRT)) +
-  stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group=1)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.2, geom = "errorbar") + 
-  labs(title = "LogRT by condition",
-       x = "condition",
-       y = "Mean LogRT") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.2)))
-
-
 # Histograms of slopes
 buildmodel <- function(data) {
   lm(logRT ~ numForeperiod*numOneBackFP,
@@ -424,31 +402,27 @@ ggplot(data = fitted_data, aes(x = numForeperiod)) +
 
 # Plot grand means
 RT_by_condition <- ggplot(data = summaryData2 %>% 
-                               group_by(ID, foreperiod, condition) %>% 
-                               summarise(meanRT = mean(meanRT)),
-                             aes(x = foreperiod,
-                                 y = meanRT,
-                                 color = condition)) +
-  geom_jitter(height = 0, width = 0.15, size = 1.0, alpha = 0.3) +
+                            group_by(ID, foreperiod, condition) %>% 
+                            summarise(meanRT = mean(meanRT)),
+                          aes(x = foreperiod,
+                              y = meanRT,
+                              color = condition)) +
+  geom_jitter(height = jthgt, width = jtwdt, size = psz, alpha = alp) +
   stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", linewidth = 1.2, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.0, width = 0.1, geom = "errorbar") + 
+  stat_summary(fun = "mean", geom = "line", linewidth = lsz, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = erlsz, width = erlwth, geom = "errorbar") + 
+  theme() +
   labs(title = "RT",
        x = "FP (s)",
        y = "Mean RT (s)",
        color = "Condition") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.2)),
-        legend.key = element_blank()) +
-  scale_color_manual(values = c("orange", "blue"), labels = c("External", "Action"))
+  cond_cols
 ggplot2::ggsave("./Analysis/Plots/RT_by_condition.jpg",
                 RT_by_condition,
-                width = 15,
-                height = 10)
+                width = 12,
+                height = 6,
+                unit = "cm",
+                dpi = 300)
 
 # Plot means by participant
 rt_by_fp_cond_part <- ggplot(data = summaryData2,
@@ -456,19 +430,13 @@ rt_by_fp_cond_part <- ggplot(data = summaryData2,
                                  y = meanRT,
                                  color = condition)) +
   stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.2, geom = "errorbar") + 
+  stat_summary(fun = "mean", geom = "line", linewidth = lsz, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = erlsz, width = erlwth, geom = "errorbar") + 
   labs(title = "RT by condition",
        x = "Foreperiod",
        y = "Mean RT",
        color = "Condition") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.2))) +
-  scale_color_manual(values = c("orange", "blue"), labels = c("External", "Action")) +
+  cond_cols +
   facet_wrap(~ ID)
 ggplot2::ggsave("./Analysis/Plots/RT_by_cond_fp_part.png",
                 rt_by_fp_cond_part,
@@ -476,99 +444,7 @@ ggplot2::ggsave("./Analysis/Plots/RT_by_cond_fp_part.png",
                 height = 5)
 
 
-
-
-# Boxplot of RT by FP and condition
-boxplot_fp_condition <- ggplot(data = summaryData2,
-                               aes(x = foreperiod,
-                                   y = meanRT,
-                                   fill = condition)) +
-  geom_boxplot() + 
-  labs(x = "Foreperiod",
-       y = "Mean RT",
-       fill = "Condition") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.2))) +
-  scale_fill_manual(values = c("orange", "blue"), labels = c("External", "Action"))
-ggplot2::ggsave("./Analysis/Plots/boxplot_RT_by_condition.png",
-                boxplot_fp_condition,
-                width = 6.7,
-                height = 5)
-
-# log RT by FP and condition
-ggplot(data = summaryData2,
-       aes(x = foreperiod,
-           y = meanLogRT,
-           color = condition)) +
-  stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.2, geom = "errorbar") + 
-  labs(title = "LogRT by condition",
-       x = "Foreperiod",
-       y = "Mean LogRT") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.2))) +
-  scale_color_manual(values = c("orange", "blue"))
-
-# Using exp(-foreperiod)
-rt_by_expfp_condition <- ggplot(data = summaryData2 %>% 
-                                  group_by(ID, expFP, condition) %>% 
-                                  summarise(meanRT = mean(meanRT)),
-                                aes(x = expFP,
-                                    y = meanRT,
-                                    color = condition)) +
-  geom_jitter(height = 0, width = 0.005, alpha = 0.5) +
-  stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", linewidth = 1.4, aes(group = condition)) +
-  stat_summary(fun.data = "mean_se", linewidth = 1.2, width = 0.02, geom = "errorbar") +
-  labs(title = "RT",
-       x = "exp(-FP)", 
-       y = "Mean RT",
-       color = "Condition") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank()) +
-  scale_color_manual(values = c("orange","blue"))
-
-
-# Sequential effects (separated by condition)
-ggplot(data = summaryData2 %>%
-         group_by(ID, foreperiod, condition, oneBackFP) %>%
-         summarise(meanRT = mean(meanRT)),
-       aes(x = foreperiod,
-           y = meanRT,
-           color=oneBackFP)) +
-  geom_jitter(height = 0, width = 0.30, alpha = 0.5) +
-  stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = oneBackFP)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.1, geom = "errorbar") +
-  labs(title = "Sequential effects by condition",
-       x = "Foreperiod",
-       y = "Mean RT",
-       color = "FP n-1") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.2))) +
-  facet_wrap(~condition) +
-  scale_color_manual(values = c('blue', 'orange', 'green'))
-
-ggsave("./Analysis/Plots/SeqEff_by_condition.tiff",
-       width = 20,
-       height = 11.11,
-       unit = "cm")
-
+#================== 1.2.2. Sequential effects ===================
 # Sequential effects separated by FP n-1
 seqEff_by_oneback <- ggplot(data = summaryData2 %>%
                               group_by(ID, foreperiod, condition, oneBackFP) %>%
@@ -576,369 +452,160 @@ seqEff_by_oneback <- ggplot(data = summaryData2 %>%
                             aes(x = foreperiod,
                                 y = meanRT,
                                 color=condition)) +
-  geom_jitter(height = 0, width = 0.30, size = 1.0, alpha = 0.3) +
-  stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", linewidth = 1.2, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.0, width = 0.1, geom = "errorbar") + 
+  geom_jitter(height = jthgt, width = jtwdt, size = psz, alpha = alp) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = lsz, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = erlsz, width = erlwth, geom = "errorbar") + 
   labs(x = "FP (s)",
        y = "Mean RT (s)",
        color = "Condition") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        strip.background = element_blank(),
-        axis.text = element_text(size = rel(0.9)),
-        axis.title = element_text(size = rel(1.1)),
-        strip.text = element_text(size = rel(1.1)),
-        legend.title = element_text(size = rel(0.9)),
-        legend.text = element_text(size = rel(0.8)),
-        legend.key = element_blank(),
-        legend.box.spacing = unit(0, "pt")) +
   facet_wrap(~oneBackFP,
              labeller = as_labeller(c(`0.6` = "FP[n-1] == 0.6",
                                       `1.2` = "FP[n-1] == 1.2",
                                       `1.8` = "FP[n-1] == 1.8"),
                                     default = label_parsed)) +
-  scale_color_manual(values = c("orange", "blue"), labels = c("External", "Action"))
+  cond_cols
 
+seqEff_by_oneback <- set_panel_size(seqEff_by_oneback, width = unit(4, "cm"),
+                                    height = unit(2.6, "cm"))
 ggsave("./Analysis/Plots/SeqEff.jpg",
        seqEff_by_oneback,
-       width = 20,
-       height = 8.33,
-       units = "cm")
-
-
-# Boxplot
-ggplot(data = summaryData2,
-       aes(x = foreperiod,
-           y = meanRT,
-           fill = oneBackFP)) +
-  geom_boxplot() +
-  labs(x = "Foreperiod",
-       y = "Mean RT",
-       fill = "FP n-1") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.2)),
-        strip.background = element_blank(),
-        strip.text = element_text(size = 14)) +
-  facet_wrap(~condition,
-             labeller = as_labeller(c(external = "External",
-                                      action = "Action"))) +
-  scale_fill_manual(values = c('blue', 'orange', 'green'))
-ggsave("./Analysis/Plots/SeqEff_boxplot.pdf",
-       width = 6.7,
-       height = 5)
-
-# Raincloud
-ggplot(data = summaryData2 %>%
-         group_by(ID, foreperiod, condition, oneBackFP) %>%
-         summarise(meanRT = mean(meanRT)),
-       aes(x = foreperiod,
-           y = meanRT,
-           fill=foreperiod)) +
-  stat_halfeye(adjust = 0.8, .width = 0, point_color = NA, position = "dodge") +
-  geom_boxplot(width = 0.12, outlier.color = NA, alpha = 0.5) +
-  stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = 1)) +
-  #stat_dots(side = "left") +
-  facet_grid(condition ~ oneBackFP) +
-  labs(x = "Foreperiod",
-       y = "Mean RT",
-       color = "FP n-1") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.2))) +
-  scale_fill_manual(values = c('blue', 'orange', 'green'))
-
-ggsave("./Analysis/Plots/SeqEff_raincloud.jpeg",
-#ggsave("./Analysis/Plots/SeqEff_raincloud.pdf",
-       width = 6.7,
-       height = 5)
-
-
-# Only FP n-1 (no FP n)
-ggplot(data = summaryData2,
-       aes(x = oneBackFP,
-           y = meanRT,
-           color=condition)) +
-  stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.1, geom = "errorbar") +
-  labs(title = "FP n-1 x condition",
-       x = "FP n-1",
-       y = "Mean RT",
-       color = "Condition") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.2))) +
-  scale_color_manual(values = c("orange", "blue"))
-ggsave("./Analysis/Plots/onebackxCondition.png",
-       width = 6.7,
-       height = 5)
-
-
-# Sequential effects of FP n-2
-ggplot(data = summaryData2,
-       aes(x = foreperiod,
-           y = meanRT,
-           color=twoBackFP)) +
-  stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = twoBackFP)) +
-  stat_summary(fun.data = "mean_cl_boot", size = 0.8, width = 0.1, geom = "errorbar") +
-  labs(title = "Sequential effects of FP n-2 by condition",
-       x = "Foreperiod",
-       y = "Mean RT",
-       color = "FP n-2") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.2))) +
-  facet_wrap(~condition) +
-  scale_color_manual(values = c('blue', 'orange', 'green'))
-ggsave("./Analysis/Plots/SeqEffTwoBack.png",
-       width = 6.7,
-       height = 5)
+       width = 14,
+       height = 5,
+       units = "cm",
+       dpi = 300)
 
 # Accuracy
 error_plot <- ggplot(data = summaryDataAcc %>% 
-                     group_by(ID, foreperiod, condition) %>%
-                     summarise(errorRate = mean(errorRate)),
-                   aes(x = foreperiod,
-                       y = errorRate,
-                       color = condition)) +
-  geom_jitter(height = 0, width = 0.15, size = 1.0, alpha = 0.3) +
+                       group_by(ID, foreperiod, condition) %>%
+                       summarise(errorRate = mean(errorRate)),
+                     aes(x = foreperiod,
+                         y = errorRate,
+                         color = condition)) +
+  geom_jitter(height = jthgt, width = jtwdt, size = psz, alpha = alp) +
   stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", linewidth = 1.2, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.0, width = 0.1, geom = "errorbar") +
-  scale_color_manual(values = c("orange", "blue"),
-                     labels = c("External", "Action")) +
+  stat_summary(fun = "mean", geom = "line", linewidth = lsz, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = erlsz, width = erlwth, geom = "errorbar") + 
   labs(title = "All trials",
        x = "FP (s)",
        y = "Mean Error Rate", 
        color = "Condition") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.8)),
-        axis.title = element_text(size = rel(1.8)),
-        legend.text = element_text(size = rel(1.5)),
-        legend.title = element_text(size = rel(1.8)),
-        plot.title = element_text(hjust = 0.5, size = rel(2.0)),
-        legend.key = element_blank())
-ggsave("./Analysis/Plots/acc_by_condition.jpg",
-       acc_plot,
+  cond_cols
+ggsave("./Analysis/Plots/error_by_condition.jpg",
+       error_plot,
        width = 15,
        height = 10)
 
 # Accuracy go
 error_go_plot <- ggplot(data = summaryDataAccGo %>% 
-         group_by(ID, foreperiod, condition) %>%
-         summarise(errorRate = mean(errorRate)),
-       aes(x = foreperiod,
-           y = errorRate,
-           color = condition)) +
-  geom_jitter(height = 0, width = 0.15, size = 1.0, alpha = 0.3) +
+                          group_by(ID, foreperiod, condition) %>%
+                          summarise(errorRate = mean(errorRate)),
+                        aes(x = foreperiod,
+                            y = errorRate,
+                            color = condition)) +
+  geom_jitter(height = jthgt, width = jtwdt, size = psz, alpha = alp) +
   stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", linewidth = 1.2, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.0, width = 0.1, geom = "errorbar") + 
-  scale_color_manual(values = c("orange", "blue"),
-                     labels = c("External", "Action")) +
+  stat_summary(fun = "mean", geom = "line", linewidth = lsz, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = erlsz, width = erlwth, geom = "errorbar") + 
   labs(title = "Misses",
        x = "FP (s)",
        y = "Mean Error Rate", 
        color = "Condition") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.8)),
-        axis.title = element_text(size = rel(1.8)),
-        legend.text = element_text(size = rel(1.5)),
-        legend.title = element_text(size = rel(1.8)),
-        plot.title = element_text(hjust = 0.5, size = rel(2.0)),
-        legend.key = element_blank())
+  cond_cols
 ggsave("./Analysis/Plots/error_by_condition_go.jpg",
        error_go_plot,
        width = 15,
-       height = 10)
+       height = 10,
+       unit = "cm")
 
 # Accuracy no go
 error_nogo_plot <- ggplot(data = summaryDataAccNoGo %>% 
-         group_by(ID, foreperiod, condition) %>%
-         summarise(errorRate = mean(errorRate)),
-       aes(x = foreperiod,
-           y = errorRate,
-           color = condition)) +
-  geom_jitter(height = 0, width = 0.15, size = 1.0, alpha = 0.3) +
+                            group_by(ID, foreperiod, condition) %>%
+                            summarise(errorRate = mean(errorRate)),
+                          aes(x = foreperiod,
+                              y = errorRate,
+                              color = condition)) +
+  geom_jitter(height = jthgt, width = jtwdt, size = psz, alpha = alp) +
   stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", linewidth = 1.2, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.0, width = 0.1, geom = "errorbar") + 
-  scale_color_manual(values = c("orange", "blue"),
-                     labels = c("External", "Action")) +
+  stat_summary(fun = "mean", geom = "line", linewidth = lsz, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = erlsz, width = erlwth, geom = "errorbar") + 
   labs(title = "False alarms",
        x = "FP (s)",
        y = "Mean Error Rate", 
        color = "Condition") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.8)),
-        axis.title = element_text(size = rel(1.8)),
-        legend.text = element_text(size = rel(1.5)),
-        legend.title = element_text(size = rel(1.8)),
-        plot.title = element_text(hjust = 0.5, size = rel(2.0)),
-        legend.key = element_blank(),
-        legend.box.spacing = unit(0, "pt"),
-        legend.margin = margin(5.5, 5.5, 5.5, 1),
-        plot.margin = unit(c(5.5, 5.5, 5.5, 1), "pt"))
+  theme(plot.margin = unit(c(5.5, 5.5, 5.5, 1), "pt")) +
+  cond_cols
 ggsave("./Analysis/Plots/error_by_condition_nogo.jpg",
        error_nogo_plot,
        width = 15,
        height = 10)
 
-# Error plots in single panel
-# Save legend as grob
-cond_legend <- gtable_filter(ggplot_gtable(ggplot_build(error_nogo_plot + 
-                                                          theme(legend.title = element_text(size = rel(1.1)),
-                                                                legend.text = element_text(size = rel(0.9))))), "guide-box")
-
-# Visualize
-grid.arrange(error_plot + theme(legend.position = "none",
-                              axis.text = element_text(size = rel(1.2)),
-                              axis.title = element_text(size = rel(1.4)),
-                              plot.title = element_text(size = rel(1.5))),
-             error_go_plot + theme(legend.position = "none",
-                                 axis.text = element_text(size = rel(1.2)),
-                                 axis.title = element_text(size = rel(1.4)),
-                                 axis.title.y = element_blank(),
-                                 plot.title = element_text(size = rel(1.5))),
-             error_nogo_plot + theme(legend.position = "none",
-                                   axis.text = element_text(size = rel(1.2)),
-                                   axis.title = element_text(size = rel(1.4)),
-                                   axis.title.y = element_blank(),
-                                   plot.title = element_text(size = rel(1.5))),
-             cond_legend,
-             nrow = 1,
-             widths = c(3/10, 3/10, 3/10, 1/10))
-
-# Save
-error_all_plots <- arrangeGrob(error_plot + theme(legend.position = "none",
-                                              axis.text = element_text(size = rel(1.2)),
-                                              axis.title = element_text(size = rel(1.4)),
-                                              plot.title = element_text(size = rel(1.5))),
-                             error_go_plot + theme(legend.position = "none",
-                                                 axis.text = element_text(size = rel(1.2)),
-                                                 axis.title = element_text(size = rel(1.4)),
-                                                 axis.title.y = element_blank(),
-                                                 plot.title = element_text(size = rel(1.5))),
-                             error_nogo_plot + theme(legend.position = "none",
-                                                   axis.text = element_text(size = rel(1.2)),
-                                                   axis.title = element_text(size = rel(1.4)),
-                                                   axis.title.y = element_blank(),
-                                                   plot.title = element_text(size = rel(1.5))),
-                             cond_legend,
-                             nrow = 1,
-                             widths = c(3/10, 3/10, 3/10, 1/10))
-
-ggsave("./Analysis/Plots/error_all_plots.jpg",
-       error_all_plots,
-       width = 12,
-       height = 6.67)
 
 # RT and accuracy in single panel
 # Save legend as grob
-cond_legend <- gtable_filter(ggplot_gtable(ggplot_build(error_nogo_plot + 
-                                                          theme(legend.title = element_text(size = rel(1.1)),
-                                                                legend.text = element_text(size = rel(0.9))))), "guide-box")
+# cond_legend <- ggpubr::get_legend(error_nogo_plot + theme(legend.title = element_text(size = rel(0.9)),
+#                                                                 legend.text = element_text(size = rel(0.8))))
 
-# Visualize
-grid.arrange(RT_by_condition + labs(tag = "A", x = "") +
-               theme(legend.position = "none",
-                     axis.text = element_text(size = rel(1.1)),
-                     axis.title = element_text(size = rel(1.3)),
-                     plot.title = element_text(size = rel(1.4)),
-                     plot.tag = element_text(size = rel(1.5))),
-             error_go_plot + labs(tag = "B") +
-               theme(legend.position = "none",
-                     axis.text = element_text(size = rel(1.1)),
-                     axis.title = element_text(size = rel(1.3)),
-                     plot.title = element_text(size = rel(1.4)),
-                     plot.tag = element_text(size = rel(1.5))),
-             error_nogo_plot + labs(tag = "C", x = "") + 
-               theme(legend.position = "none",
-                     axis.text = element_text(size = rel(1.1)),
-                     axis.title = element_text(size = rel(1.3)),
-                     plot.title = element_text(size = rel(1.4)),
-                     plot.tag = element_text(size = rel(1.5))) +
-               labs(y = ""),
+cond_legend <- ggpubr::get_legend(error_nogo_plot)
+
+
+grid.arrange(arrangeGrob(RT_by_condition + labs(tag = "A", x = "") +
+                           theme(legend.position = "none"),
+                         error_go_plot + labs(tag = "B") +
+                           theme(legend.position = "none"),
+                         error_nogo_plot + labs(tag = "C", x = "") + 
+                           theme(legend.position = "none") +
+                           labs(y = ""),
+                         nrow = 1,
+                         widths = c(1/3, 1/3, 1/3)),
              cond_legend,
-             nrow = 1,
-             widths = c(5/17, 5/17, 5/17, 2/17))
+             nrow = 2,
+             heights = c(9/10, 1/10))
 
+RT_panel <- RT_by_condition + labs(tag = "A", x = "") +
+  theme(legend.position = "none")
+RT_panel <- set_panel_size(RT_panel, width = unit(4, "cm"),
+                           height = unit(2.6, "cm"))
+  
+error_go_panel <- error_go_plot + labs(tag = "B") +
+  theme(legend.position = "none")
+error_go_panel <- set_panel_size(error_go_panel, width = unit(4, "cm"),
+                                 height = unit(2.6, "cm"))
 
-rt_error_plots <- arrangeGrob(RT_by_condition + labs(tag = "A", x = "") +
-                              theme(legend.position = "none",
-                                    axis.text = element_text(size = rel(1.1)),
-                                    axis.title = element_text(size = rel(1.3)),
-                                    plot.title = element_text(size = rel(1.4)),
-                                    plot.tag = element_text(size = rel(1.5))),
-                            error_go_plot + labs(tag = "B") +
-                              theme(legend.position = "none",
-                                    axis.text = element_text(size = rel(1.1)),
-                                    axis.title = element_text(size = rel(1.3)),
-                                    plot.title = element_text(size = rel(1.4)),
-                                    plot.tag = element_text(size = rel(1.5))),
-                            error_nogo_plot + labs(tag = "C", x = "") + 
-                              theme(legend.position = "none",
-                                    axis.text = element_text(size = rel(1.1)),
-                                    axis.title = element_text(size = rel(1.3)),
-                                    plot.title = element_text(size = rel(1.4)),
-                                    plot.tag = element_text(size = rel(1.5))) +
-                              labs(y = ""),
-                            cond_legend,
-                            nrow = 1,
-                            widths = c(5/17, 5/17, 5/17, 2/17))
+error_nogo_panel <- error_nogo_plot + labs(tag = "C", x = "") + 
+  theme(legend.position = "none") +
+  labs(y = "")
+error_nogo_panel <- set_panel_size(error_nogo_panel, width = unit(4, "cm"),
+                                   height = unit(2.6, "cm"))
+
+# rt_error_plots <- arrangeGrob(arrangeGrob(RT_by_condition + labs(tag = "A", x = "") +
+#                                             theme(legend.position = "none"),
+#                                           error_go_plot + labs(tag = "B") +
+#                                             theme(legend.position = "none"),
+#                                           error_nogo_plot + labs(tag = "C", x = "") + 
+#                                             theme(legend.position = "none") +
+#                                             labs(y = ""),
+#                                           nrow = 1,
+#                                           widths = c(1/3, 1/3, 1/3)),
+#                               cond_legend,
+#                               nrow = 2,
+#                               heights = c(9/10, 1/10))
+
+rt_error_plots <- arrangeGrob(arrangeGrob(RT_panel,
+                                          error_go_panel,
+                                          error_nogo_panel,
+                                          nrow = 1,
+                                          widths = c(1/3, 1/3, 1/3)),
+                              cond_legend,
+                              nrow = 2,
+                              heights = c(9/10, 1/10))
 
 ggsave("./Analysis/Plots/rt_error_plots.jpg",
        rt_error_plots,
-       width = 20,#16,
-       height = 8.33,#11.94,
-       units = "cm")
-
-
-#  n-1 trial type
-ggplot(data = summaryData2,
-       aes(x = oneBacktrialType,
-           y = meanRT,
-           color=condition)) +
-  stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.1, geom = "errorbar") +
-  labs(x = "FP n-1 trial type",
-       y = "Mean RT",
-       color = "Condition") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.2))) +
-  facet_wrap(~foreperiod) +
-  scale_color_manual(values = c('orange', 'blue'))
-ggsave("./Analysis/Plots/oneBackTrialType.png",
-       width = 7.5,
-       height = 5)
+       width = 16,
+       height = 5,
+       units = "cm",
+       dpi = 300)
 
 
 # Sequential effects separated by FP n-1 and n-1 trial type
@@ -948,98 +615,50 @@ seqEff_by_oneback_trialtype <- ggplot(data = summaryData2 %>%
        aes(x = foreperiod,
            y = meanRT,
            color=condition)) +
-  geom_jitter(height = 0, width = 0.30, size = 1.0, alpha = 0.3) +
-  stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", linewidth = 1.2, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.0, width = 0.1, geom = "errorbar") + 
+  geom_jitter(height = jthgt, width = jtwdt, size = psz, alpha = alp) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun = "mean", geom = "line", linewidth = lsz, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = erlsz, width = erlwth, geom = "errorbar") + 
   labs(x = "FP (s)",
        y = "Mean RT (s)",
        color = "Condition") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        strip.background = element_blank(),
-        axis.text = element_text(size = rel(0.9)),
-        axis.title = element_text(size = rel(1.1)),
-        strip.text = element_text(size = rel(1.1)),
-        legend.title = element_text(size = rel(0.9)),
-        legend.text = element_text(size = rel(0.8)),
-        legend.key = element_blank(),
-        legend.box.spacing = unit(0, "pt")) +
   facet_grid(oneBacktrialType~oneBackFP,
              labeller = labeller(oneBackFP = as_labeller(c(`0.6` = "FP[n-1] == 0.6",
                                                `1.2` = "FP[n-1] == 1.2",
                                                `1.8` = "FP[n-1] == 1.8"),
                                              default = label_parsed),
                                  oneBacktrialType = c("go" = "Go", "no-go" = "No-go"))) +
-  scale_color_manual(values = c('orange', 'blue'), labels = c("External", "Action"))
+  cond_cols
+seqEff_by_oneback_trialtype <- set_panel_size(seqEff_by_oneback_trialtype,
+                                              width = unit(4, "cm"),
+                                              height = unit(2.6, "cm"))
 
 ggsave("./Analysis/Plots/SeqEff_oneBackTrialType.jpg",
        seqEff_by_oneback_trialtype,
-       width = 20,
-       height = 14.33,
-       units = "cm")
-
-ggsave("./Analysis/Plots/SeqEff_oneBackTrialType.tiff",
-       seqEff_by_oneback_trialtype,
-       width = 20,
-       height = 17.11,
-       unit = "cm")
-
-# Sequential effects separated by condition and n-1 trial type
-ggplot(data = summaryData2,
-       aes(x = foreperiod,
-           y = meanRT,
-           color=oneBackFP)) +
-  stat_summary(fun = "mean", geom = "point", size = 1.5) +
-  stat_summary(fun = "mean", geom = "line", linewidth = 0.8, aes(group = oneBackFP)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 0.8, width = 0.1, geom = "errorbar") +
-  labs(x = "Foreperiod",
-       y = "Mean RT",
-       color = "FP n-1") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.5)),
-        axis.title = element_text(size = rel(1.8)),
-        strip.text = element_text(size = rel(1.8)),
-        legend.text = element_text(size = rel(1.5)),
-        legend.title = element_text(size = rel(1.8))) +
-  facet_grid(oneBacktrialType ~ condition) +
-  scale_color_manual(values = c("blue", "orange", "green"))
-ggsave("./Analysis/Plots/RT_condition_trialtype.pdf",
-       width = 6.7,
-       height = 5)
+       width = 14,
+       height = 8,,
+       units = "cm",
+       dpi = 300)
 
 
-# SD
+
+
+# SD of RT by condition
 sd_by_condition <- ggplot(data = goData2 %>% 
                             group_by(ID, foreperiod, condition) %>% 
                             summarise(sdRT = sd(RT)),
                           aes(x = foreperiod,
                               y = sdRT,
                               color = condition)) +
-  geom_jitter(height = 0, width = 0.15, alpha = 0.5) +
+  geom_jitter(height = jthgt, width = jtwdt, size = psz, alpha = alp) +
   stat_summary(fun = "mean", geom = "point") +
-  stat_summary(fun = "mean", geom = "line", linewidth = 1.4, aes(group=condition)) +
-  stat_summary(fun.data = "mean_cl_boot", linewidth = 1.2, width = 0.1, geom = "errorbar") + 
+  stat_summary(fun = "mean", geom = "line", linewidth = lsz, aes(group=condition)) +
+  stat_summary(fun.data = "mean_cl_boot", linewidth = erlsz, width = erlwth, geom = "errorbar") + 
   labs(title = "RT",
        x = "FP (s)",
        y = "SD RT (s)",
        color = "Condition") +
-  theme(plot.title = element_text(size = 14, hjust = 0.5),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.text = element_text(size = rel(1.2)),
-        axis.title = element_text(size = rel(1.2)),
-        legend.key = element_blank()) +
-  scale_color_manual(values = c("orange", "blue"), labels = c("External", "Action"))
-ggplot2::ggsave("./Analysis/Plots/RT_by_condition.pdf",
-                sd_by_condition,
-                width = 15,
-                height = 10)
+  cond_cols
 
 #==================================== 1.2. Tables ================================
 # RT By foreperiod and condition
@@ -1069,17 +688,6 @@ margAcc
 #==========================================================================================#
 #==================================== 2. Basic models ======================================
 #==========================================================================================#
-
-# Set constrasts for variables used in ANOVAs
-contrasts(summaryData$foreperiod) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2)
-contrasts(summaryData$condition) <- c(-1/2, 1/2)
-contrasts(summaryData$oneBackFP) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2)
-contrasts(summaryData$oneBackFPGo) <- contr.treatment(4)-matrix(rep(1/4,12),ncol=3)
-
-contrasts(summaryData2$foreperiod) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2)
-contrasts(summaryData2$condition) <- c(-1/2, 1/2)
-contrasts(summaryData2$oneBackFP) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2)
-contrasts(summaryData2$oneBackFPGo) <- contr.treatment(4)-matrix(rep(1/4,12),ncol=3)
 
 #==================== 2.1. FP x RT by condition ======================
 # Anova with RT
@@ -1262,13 +870,6 @@ seqEff2Anova <- aov_ez(id = "ID",
 
 
 #=================== 2.2.3. Accuracy ==========================
-# Set constrasts for variables used in ANOVAs
-contrasts(summaryDataAll$foreperiod) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2)
-contrasts(summaryDataAll$condition) <- c(-1/2, 1/2)
-contrasts(summaryDataAll$oneBackFP) <- contr.treatment(3)-matrix(rep(1/3,6),ncol=2)
-contrasts(summaryDataAll$oneBackFPGo) <- contr.treatment(4)-matrix(rep(1/4,12),ncol=3)
-
-
 ggplot(data = summaryDataAcc,
        aes(x = foreperiod,
            y = meanAcc,
